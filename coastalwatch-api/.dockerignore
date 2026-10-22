@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.git
+.github
+.idea
+.vscode
+node_modules
+vendor
+tests
+test_boot.php
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+*.log
