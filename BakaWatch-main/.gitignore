@@ -1,0 +1,54 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+vendor/
+.venv/
+
+# ── Build output ──────────────────────────────────────────────────────────────
+.next/
+dist/
+build/
+
+# ── Environment files (contain secrets) ──────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ── Database files ────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+
+# ── ML model (large binary — train locally using train_model.py) ──────────────
+*.h5
+*.pkl
+*.joblib
+*.bin
+ml-service/dataset/
+ml-service/class_labels.json
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# ── PHP / Laravel ─────────────────────────────────────────────────────────────
+/COASTAL WATCH/coastalwatch-api/bootstrap/cache/*.php
+/COASTAL WATCH/coastalwatch-api/storage/
+/COASTAL WATCH/coastalwatch-api/public/storage
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
