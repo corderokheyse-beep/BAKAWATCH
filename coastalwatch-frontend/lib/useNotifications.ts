@@ -37,8 +37,13 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount]     = useState(0)
   const [loading, setLoading]             = useState(false)
   const prevCountRef = useRef<number | null>(null)
+  const unreadRequestInFlightRef = useRef(false)
 
   const fetchUnreadCount = useCallback(async () => {
+    // Focus changes and the timer can fire close together. Keep only one
+    // unread-count request active so a busy local API cannot accumulate a queue.
+    if (unreadRequestInFlightRef.current) return
+    unreadRequestInFlightRef.current = true
     try {
       const { data } = await api.get('/notifications/unread-count')
       const newCount: number = data.count ?? 0
@@ -49,7 +54,9 @@ export function useNotifications() {
       }
       prevCountRef.current = newCount
       setUnreadCount(newCount)
-    } catch {}
+    } catch {} finally {
+      unreadRequestInFlightRef.current = false
+    }
   }, [])
 
   const fetchNotifications = useCallback(async () => {
@@ -76,13 +83,12 @@ export function useNotifications() {
     setUnreadCount(0)
   }, [])
 
-  // Poll every 20 s — fast enough to feel real-time without hammering the
-  // server. Skip the request while the tab is hidden so backgrounded tabs
-  // don't keep hitting the API, and refresh immediately when it regains focus.
+  // Poll every 60 s. Skip requests while hidden and refresh on return to the
+  // tab. fetchUnreadCount also prevents timer/focus requests from overlapping.
   useEffect(() => {
     const tick = () => { if (!document.hidden) fetchUnreadCount() }
     tick()
-    const interval = setInterval(tick, 20_000)
+    const interval = setInterval(tick, 60_000)
     const onVisible = () => { if (!document.hidden) fetchUnreadCount() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
