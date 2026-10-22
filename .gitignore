@@ -1,0 +1,51 @@
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+**/firebase-service-account*.json
+**/*service-account*.json
+
+# Node.js / Next.js
+**/node_modules/
+**/.next/
+**/out/
+**/coverage/
+**/tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Laravel generated files and local data
+coastalwatch-api/vendor/
+coastalwatch-api/bootstrap/cache/*.php
+coastalwatch-api/storage/*.key
+coastalwatch-api/storage/logs/*
+coastalwatch-api/storage/backups/
+coastalwatch-api/storage/framework/cache/**
+coastalwatch-api/storage/framework/sessions/**
+coastalwatch-api/storage/framework/testing/**
+coastalwatch-api/storage/framework/views/**
+coastalwatch-api/public/storage
+coastalwatch-api/database/*.sqlite
+coastalwatch-api/database/*.sqlite-*
+
+# Python environments, bytecode, and downloaded training data
+ml-service/.venv/
+ml-service/venv/
+ml-service/__pycache__/
+ml-service/**/*.py[cod]
+ml-service/dataset/
+ml-service/dataset_old_lowres/
+ml-service/mangrove_model.weights.h5
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

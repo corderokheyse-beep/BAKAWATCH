@@ -1,0 +1,264 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..800;1,14..32,300..800&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body {
+    @apply bg-[#f5f7f5] text-gray-900 font-sans;
+    font-feature-settings: 'cv02','cv03','cv04','cv11';
+  }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-200 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-300; }
+  ::selection { @apply bg-primary-100 text-primary-900; }
+  :focus-visible { @apply outline-none ring-2 ring-primary-500 ring-offset-2 rounded-lg; }
+}
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-primary-600 hover:bg-primary-700 active:bg-primary-800
+           text-white text-sm font-semibold px-4 py-2.5 rounded-xl
+           shadow-[0_1px_3px_rgba(22,163,74,0.3)] hover:shadow-[0_4px_12px_rgba(22,163,74,0.35)]
+           transition-all duration-150 ease-out
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white hover:bg-gray-50 active:bg-gray-100
+           text-gray-700 text-sm font-semibold px-4 py-2.5 rounded-xl
+           border border-gray-200 shadow-sm hover:shadow
+           transition-all duration-150 ease-out;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2
+           bg-red-600 hover:bg-red-700 text-white text-sm font-semibold
+           px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md
+           transition-all duration-150 ease-out;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           text-gray-600 hover:text-gray-900 hover:bg-gray-100
+           text-sm font-medium px-3 py-2 rounded-xl
+           transition-all duration-150 ease-out;
+  }
+
+  /* ── Cards ───────────────────────────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-6;
+  }
+  .card-hover {
+    @apply card hover:shadow-[0_4px_16px_rgba(0,0,0,0.09)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer;
+  }
+  .stat-card {
+    @apply bg-white rounded-2xl border border-gray-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5 flex items-start gap-4;
+  }
+
+  /* ── Form controls ───────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900
+           placeholder:text-gray-400
+           shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]
+           focus:outline-none focus:ring-2 focus:ring-primary-500/25 focus:border-primary-400
+           transition-all duration-150;
+  }
+  .label {
+    @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5;
+  }
+  .err-msg {
+    @apply text-red-500 text-xs mt-1;
+  }
+
+  /* ── Badges ──────────────────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  /* ── Table ───────────────────────────────────────────────────────────────── */
+  .table-header {
+    @apply text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide bg-gray-50/80;
+  }
+  .table-cell { @apply px-4 py-3.5 text-sm text-gray-700; }
+
+  /* ── Layout helpers ──────────────────────────────────────────────────────── */
+  .page-container { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8; }
+  .page-title     { @apply text-2xl font-bold text-gray-900 tracking-tight; }
+  .page-subtitle  { @apply text-sm text-gray-500 mt-0.5; }
+  .section-title  { @apply text-sm font-semibold text-gray-900; }
+
+  /* ── Divider ─────────────────────────────────────────────────────────────── */
+  .divider { @apply border-t border-gray-100; }
+}
+
+/* ── Leaflet ─────────────────────────────────────────────────────────────────── */
+.leaflet-container { z-index: 0; font-family: inherit; }
+.leaflet-control-zoom { border: none !important; box-shadow: 0 2px 8px rgba(0,0,0,.1) !important; border-radius: 12px !important; overflow: hidden; }
+.leaflet-control-zoom a { color: #374151 !important; font-size: 16px !important; }
+.leaflet-popup-content-wrapper {
+  border-radius: 14px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06) !important;
+  border: 1px solid rgba(0,0,0,.05) !important;
+  padding: 0 !important;
+}
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip-container { display: none; }
+
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes fadeIn    { from { opacity: 0 }                              to { opacity: 1 } }
+@keyframes slideUp   { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-8px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes scaleIn   { from { opacity: 0; transform: scale(.95) }       to { opacity: 1; transform: scale(1) } }
+@keyframes shimmer   { from { background-position: -200% 0 }            to { background-position: 200% 0 } }
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px) scale(.95); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%       { transform: rotate(-12deg); }
+  75%       { transform: rotate(12deg); }
+}
+
+.animate-fade-in   { animation: fadeIn    .25s ease-out both; }
+.animate-slide-up  { animation: slideUp   .3s  ease-out both; }
+.animate-slide-down{ animation: slideDown .25s ease-out both; }
+.animate-scale-in  { animation: scaleIn   .2s  ease-out both; }
+.animate-in        { animation: slideUp   .3s  ease-out both; }
+.animate-float     { animation: float     3s   ease-in-out infinite; }
+.animate-count-up  { animation: countUp   .4s  ease-out both; }
+
+/* Staggered children */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ── Scroll-reveal (JS-free via CSS) ─────────────────────────────────────────── */
+/* Add class="reveal" to any element — it fades+slides in when it enters viewport */
+/* Requires the IntersectionObserver snippet in layout or a global hook */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity .5s ease-out, transform .5s ease-out;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Enhanced card hover ─────────────────────────────────────────────────────── */
+.card-interactive {
+  @apply bg-white rounded-2xl border border-gray-100/80
+         shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-6
+         transition-all duration-250 ease-out cursor-pointer
+         hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]
+         hover:-translate-y-1 hover:border-gray-200/80;
+}
+
+/* Glow on hover for stat cards */
+.stat-card-glow:hover {
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.12), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RESPONSIVE UTILITIES
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Responsive table wrapper — horizontal scroll on small screens */
+.table-responsive {
+  @apply w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0;
+}
+.table-responsive table {
+  @apply min-w-full;
+}
+
+/* Stack two-col grids on mobile */
+@media (max-width: 640px) {
+  .grid-cols-2-stack { grid-template-columns: 1fr !important; }
+}
+
+/* Sidebar width on very small screens */
+@media (max-width: 360px) {
+  #mobile-nav aside { width: 100% !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ACCESSIBILITY IMPROVEMENTS
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Stronger focus ring on interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid #16a34a;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Remove default outline only when using focus-visible (mouse users unaffected) */
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* High-contrast text minimum */
+.text-gray-400 { color: #6b7280; }   /* Ensure >= 4.5:1 on white */
+
+/* Reduced motion — respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STAT CARD GLOW — referenced by analytics page
+   ─────────────────────────────────────────────────────────────────────────── */
+.stat-card-glow:hover {
+  box-shadow: 0 4px 20px rgba(22, 163, 74, 0.12), 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRINT STYLES — clean report printing
+   ─────────────────────────────────────────────────────────────────────────── */
+@media print {
+  aside, header, .btn-primary, .btn-secondary, .btn-danger,
+  #mobile-nav, [aria-label="Open navigation menu"] {
+    display: none !important;
+  }
+  main { margin: 0 !important; padding: 0 !important; }
+  .card { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+  body { background: white !important; color: black !important; }
+}

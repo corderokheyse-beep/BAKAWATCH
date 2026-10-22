@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="58" fill="url(#grad1)"/>
+
+  <!-- Mangrove roots (prop roots) -->
+  <path d="M38 90 Q34 78 30 72" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M38 90 Q40 76 36 68" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M60 92 Q56 80 52 74" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M60 92 Q62 78 68 72" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M82 90 Q80 76 84 68" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M82 90 Q86 78 90 72" stroke="#86efac" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Trunk left -->
+  <rect x="35" y="58" width="6" height="34" rx="3" fill="#4ade80"/>
+  <!-- Trunk center -->
+  <rect x="57" y="52" width="6" height="40" rx="3" fill="#22c55e"/>
+  <!-- Trunk right -->
+  <rect x="79" y="58" width="6" height="34" rx="3" fill="#4ade80"/>
+
+  <!-- Canopy left -->
+  <ellipse cx="38" cy="52" rx="14" ry="18" fill="#16a34a"/>
+  <ellipse cx="38" cy="46" rx="11" ry="14" fill="#22c55e"/>
+
+  <!-- Canopy center (tallest) -->
+  <ellipse cx="60" cy="44" rx="16" ry="22" fill="#15803d"/>
+  <ellipse cx="60" cy="37" rx="13" ry="17" fill="#22c55e"/>
+  <ellipse cx="60" cy="31" rx="9" ry="12" fill="#4ade80"/>
+
+  <!-- Canopy right -->
+  <ellipse cx="82" cy="52" rx="14" ry="18" fill="#16a34a"/>
+  <ellipse cx="82" cy="46" rx="11" ry="14" fill="#22c55e"/>
+
+  <!-- Water reflection -->
+  <ellipse cx="60" cy="93" rx="34" ry="5" fill="rgba(134,239,172,0.18)"/>
+
+  <!-- BW text mark -->
+  <text x="60" y="115" text-anchor="middle" font-family="system-ui,sans-serif" font-size="9" font-weight="800" letter-spacing="1.5" fill="white" opacity="0.9">BAKAWATCH</text>
+
+  <defs>
+    <linearGradient id="grad1" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14532d"/>
+      <stop offset="100%" stop-color="#166534"/>
+    </linearGradient>
+  </defs>
+</svg>

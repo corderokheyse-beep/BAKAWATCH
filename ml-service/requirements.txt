@@ -1,0 +1,20 @@
+# FastAPI service
+fastapi==0.115.0
+uvicorn==0.30.0
+python-multipart==0.0.9
+
+# ML / inference
+# tensorflow 2.21.0 is the latest release supporting Python 3.10–3.13
+# (tensorflow 2.17.0 only supported up to Python 3.11)
+tensorflow==2.21.0
+pillow==11.2.1
+numpy==2.0.2
+
+# HTTP client (used by Laravel proxy + dataset downloader)
+requests==2.32.3
+
+# Training only (not needed for the running service)
+scikit-learn==1.5.2
+matplotlib==3.9.2
+seaborn==0.13.2
+tqdm==4.66.5

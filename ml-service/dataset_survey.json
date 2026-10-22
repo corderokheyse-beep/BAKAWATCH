@@ -1,0 +1,122 @@
+{
+  "Avicennia marina": {
+    "taxon_id": 75723,
+    "regions": {
+      "Philippines": 0,
+      "Global": 11088
+    },
+    "estimated_photos": 500
+  },
+  "Avicennia officinalis": {
+    "taxon_id": 189587,
+    "regions": {
+      "Philippines": 0,
+      "Global": 159
+    },
+    "estimated_photos": 318
+  },
+  "Bruguiera gymnorrhiza": {
+    "taxon_id": 1361284,
+    "regions": {
+      "Philippines": 0,
+      "Global": 2707
+    },
+    "estimated_photos": 500
+  },
+  "Bruguiera cylindrica": {
+    "taxon_id": 189944,
+    "regions": {
+      "Philippines": 0,
+      "Global": 228
+    },
+    "estimated_photos": 456
+  },
+  "Bruguiera sexangula": {
+    "taxon_id": 189949,
+    "regions": {
+      "Philippines": 0,
+      "Global": 54
+    },
+    "estimated_photos": 108
+  },
+  "Ceriops tagal": {
+    "taxon_id": 190475,
+    "regions": {
+      "Philippines": 0,
+      "Global": 254
+    },
+    "estimated_photos": 500
+  },
+  "Ceriops decandra": {
+    "taxon_id": 190474,
+    "regions": {
+      "Philippines": 0,
+      "Global": 18
+    },
+    "estimated_photos": 36
+  },
+  "Rhizophora apiculata": {
+    "taxon_id": 196660,
+    "regions": {
+      "Philippines": 0,
+      "Global": 540
+    },
+    "estimated_photos": 500
+  },
+  "Rhizophora mucronata": {
+    "taxon_id": 196667,
+    "regions": {
+      "Philippines": 0,
+      "Global": 797
+    },
+    "estimated_photos": 500
+  },
+  "Rhizophora stylosa": {
+    "taxon_id": 196666,
+    "regions": {
+      "Philippines": 0,
+      "Global": 2683
+    },
+    "estimated_photos": 500
+  },
+  "Sonneratia alba": {
+    "taxon_id": 196661,
+    "regions": {
+      "Philippines": 0,
+      "Global": 1140
+    },
+    "estimated_photos": 500
+  },
+  "Sonneratia caseolaris": {
+    "taxon_id": 196662,
+    "regions": {
+      "Philippines": 0,
+      "Global": 683
+    },
+    "estimated_photos": 500
+  },
+  "Xylocarpus granatum": {
+    "taxon_id": 196657,
+    "regions": {
+      "Philippines": 0,
+      "Global": 511
+    },
+    "estimated_photos": 500
+  },
+  "Lumnitzera racemosa": {
+    "taxon_id": 164873,
+    "regions": {
+      "Philippines": 0,
+      "Global": 2110
+    },
+    "estimated_photos": 500
+  },
+  "Aegiceras corniculatum": {
+    "taxon_id": 183233,
+    "regions": {
+      "Philippines": 0,
+      "Global": 3278
+    },
+    "estimated_photos": 500
+  }
+}
