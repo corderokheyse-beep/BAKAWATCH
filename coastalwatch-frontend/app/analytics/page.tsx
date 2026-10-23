@@ -136,11 +136,11 @@ export default function AnalyticsIndexPage() {
   }, {})
 
   // ── Summary aggregates ──────────────────────────────────────────────────────
-  const totalTrees    = sites.reduce((s, x) => s + (x.plantation_count ?? 0), 0)
-  const totalHa       = sites.reduce((s, x) => s + (x.area_hectares ?? 0), 0)
+  const totalTrees    = sites.reduce((s, x) => s + Number(x.plantation_count ?? 0), 0)
+  const totalHa       = sites.reduce((s, x) => s + Number(x.area_hectares ?? 0), 0)
   const sitesWithRate = sites.filter(s => s.survival_rate != null)
   const avgSurvival   = sitesWithRate.length
-    ? Math.round(sitesWithRate.reduce((s, x) => s + (x.survival_rate ?? 0), 0) / sitesWithRate.length)
+    ? Math.round(sitesWithRate.reduce((s, x) => s + Number(x.survival_rate ?? 0), 0) / sitesWithRate.length)
     : null
   const needsAttention = sites.filter(s => s.survival_rate != null && s.survival_rate < 40).length
 

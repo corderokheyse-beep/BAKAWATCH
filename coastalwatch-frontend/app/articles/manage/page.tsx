@@ -196,7 +196,7 @@ export default function ManageArticlesPage() {
   }
 
   if (authLoading || loading) return (
-    <SidebarLayout title="Articles" subtitle="Create and publish articles, tips, and guides">
+    <SidebarLayout title="Tips & Guides" subtitle="Create and publish practical tips and field guides">
       <div className="page-container"><LoadingSpinner /></div>
     </SidebarLayout>
   )
@@ -204,21 +204,21 @@ export default function ManageArticlesPage() {
   const hasFilters = !!(search || catFilter || statusFilter)
 
   return (
-    <SidebarLayout title="Articles" subtitle="Create and publish articles, tips, and guides">
+    <SidebarLayout title="Tips & Guides" subtitle="Create and publish practical tips and field guides">
       <div className="page-container space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-4 animate-slide-up">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Articles</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Tips &amp; Guides</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {articles.length} article{articles.length !== 1 ? 's' : ''} total
+              {articles.length} resource{articles.length !== 1 ? 's' : ''} total
               {' · '}{articles.filter(a => a.is_published).length} published
               {' · '}{articles.filter(a => !a.is_published).length} drafts
             </p>
           </div>
           <button onClick={openNew} className="btn-primary gap-1.5 shrink-0">
-            <Plus className="w-4 h-4" /> New Article
+            <Plus className="w-4 h-4" /> New Tip or Guide
           </button>
         </div>
 
@@ -230,7 +230,7 @@ export default function ManageArticlesPage() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 className="input pl-10 pr-9"
-                placeholder="Search articles…"
+                placeholder="Search tips and guides…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -279,10 +279,10 @@ export default function ManageArticlesPage() {
             <div className="w-16 h-16 rounded-3xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
               <BookOpen className="w-8 h-8 text-gray-400" />
             </div>
-            <p className="text-base font-semibold text-gray-700 mb-1">No articles yet</p>
-            <p className="text-sm text-gray-400 mb-5">Write your first article to share knowledge with the community.</p>
+            <p className="text-base font-semibold text-gray-700 mb-1">No tips or guides yet</p>
+            <p className="text-sm text-gray-400 mb-5">Publish your first practical tip or field guide for the community.</p>
             <button onClick={openNew} className="btn-primary text-sm">
-              <Plus className="w-4 h-4" /> Write First Article
+              <Plus className="w-4 h-4" /> Write First Guide
             </button>
           </div>
         ) : filtered.length === 0 ? (

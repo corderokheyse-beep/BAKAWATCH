@@ -530,7 +530,8 @@ export default function SitePolygonMap({
         }
       `}</style>
 
-      <div className="relative" style={{ height }}>
+      <div className="relative">
+        <div className="relative" style={{ height }}>
         <div ref={containerRef} style={{ height: '100%' }} className="w-full" />
 
         {/* ── Mangrove-area draw tool (editable, single-site detail map) ──── */}
@@ -602,9 +603,10 @@ export default function SitePolygonMap({
             )}
           </div>
         )}
+        </div>
 
         {/* ── Status legend ─────────────────────────────────────────────── */}
-        <div className="absolute bottom-10 left-3 z-[400] bg-white/95 backdrop-blur-sm rounded-2xl shadow-md border border-gray-100 px-4 py-3 text-xs space-y-2">
+        <div className="static mx-3 mt-3 w-fit z-[400] bg-white/95 backdrop-blur-sm rounded-2xl shadow-md border border-gray-100 px-4 py-3 text-xs space-y-2 sm:absolute sm:bottom-10 sm:left-3 sm:mx-0 sm:mt-0">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Site Status</p>
           {Object.entries(STATUS_CONFIG).map(([key, c]) => {
             const Icon = STATUS_ICON[key] ?? Sprout
@@ -633,7 +635,7 @@ export default function SitePolygonMap({
 
         {/* ── Site detail panel ─────────────────────────────────────────── */}
         {selected && cfg && (
-          <div className="absolute top-3 right-3 z-[500] w-72 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in slide-in-from-right-4 duration-200">
+          <div className="static z-[500] w-auto mx-3 mt-3 mb-3 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in slide-in-from-right-4 duration-200 sm:absolute sm:top-3 sm:right-3 sm:mx-0 sm:mt-0 sm:mb-0 sm:w-72">
             <div className="px-4 py-3 flex items-start justify-between gap-2" style={{ background: cfg.bg, borderBottom: `3px solid ${cfg.color}` }}>
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: cfg.color }}>
@@ -779,7 +781,7 @@ export default function SitePolygonMap({
 
         {/* ── Hint ──────────────────────────────────────────────────────── */}
         {sites.length > 0 && !selected && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400] bg-white/90 backdrop-blur-sm rounded-full px-4 py-1.5 shadow-md border border-gray-100 pointer-events-none flex items-center gap-1.5">
+          <div className="hidden absolute top-3 left-1/2 -translate-x-1/2 z-[400] bg-white/90 backdrop-blur-sm rounded-full px-4 py-1.5 shadow-md border border-gray-100 pointer-events-none items-center gap-1.5 sm:flex">
             <MapPin className="w-3.5 h-3.5 text-primary-600" />
             <p className="text-xs text-gray-600 font-medium">Click a pin to view site details</p>
           </div>

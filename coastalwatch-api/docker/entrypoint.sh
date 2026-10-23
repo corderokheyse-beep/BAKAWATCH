@@ -19,6 +19,7 @@ if [ "${RUN_STARTER_SITES_SEEDER:-false}" = "true" ]; then
     fi
     php artisan db:seed --class='Database\Seeders\ProductionSeeder' --force
     php artisan db:seed --class='Database\Seeders\StarterSitesSeeder' --force
+    php artisan db:seed --class='Database\Seeders\StarterOperationalDataSeeder' --force
 fi
 
 php artisan config:cache
