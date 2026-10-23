@@ -51,6 +51,7 @@ export default function SiteDetailPage() {
   const [plantations, setPlantations] = useState<PlantationRecord[]>([])
   const [photos, setPhotos]           = useState<SitePhoto[]>([])
   const [loading, setLoading]         = useState(true)
+  const [siteLoadError, setSiteLoadError] = useState<'not-found' | 'load-failed' | null>(null)
   const [tab, setTab]                 = useState<Tab>('overview')
   const [photoFilter, setPhotoFilter] = useState<'all' | 'before' | 'after'>('all')
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
@@ -98,6 +99,9 @@ export default function SiteDetailPage() {
       router.replace('/analytics')
       return
     }
+    setSite(null)
+    setSiteLoadError(null)
+    setLoading(true)
     // Fetch site first — it's public. Secondary data (plantation records, photos,
     // ecosystem) requires auth and may 403 for some roles; use allSettled so a
     // failure on any secondary call never prevents the site from rendering.
@@ -106,7 +110,13 @@ export default function SiteDetailPage() {
       fetchSitePlantationRecords(siteId),
       fetchSitePhotos(siteId),
     ]).then(([s, p, ph]) => {
-      if (s.status === 'fulfilled') setSite(s.value)
+      if (s.status === 'fulfilled') {
+        setSite(s.value)
+      } else {
+        const status = (s.reason as { response?: { status?: number } })?.response?.status
+        setSiteLoadError(status === 404 ? 'not-found' : 'load-failed')
+        console.error('[Site detail] Failed to load site.', s.reason)
+      }
       if (p.status  === 'fulfilled') setPlantations(p.value)
       if (ph.status === 'fulfilled') setPhotos(ph.value)
     }).finally(() => setLoading(false))
@@ -301,13 +311,32 @@ export default function SiteDetailPage() {
       <div className="flex items-center justify-center h-64"><LoadingSpinner /></div>
     </SidebarLayout>
   )
-  if (!site) return (
+  if (siteLoadError) return (
     <SidebarLayout>
-      <div className="text-center py-16">
+      <div className="text-center py-16 px-4">
         <TreePine className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-        <p className="text-gray-500 font-medium">Site not found.</p>
+        <p className="text-gray-700 font-semibold">
+          {siteLoadError === 'not-found' ? 'Site not found.' : 'Unable to load this site.'}
+        </p>
+        {siteLoadError === 'load-failed' && (
+          <>
+            <p className="text-sm text-gray-500 mt-2">The server could not load the site details. Please try again.</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="btn-secondary text-sm mt-4"
+            >
+              Try again
+            </button>
+          </>
+        )}
         <Link href="/sites" className="text-primary-600 text-sm mt-2 inline-block hover:underline">← Back to Sites</Link>
       </div>
+    </SidebarLayout>
+  )
+  if (!site) return (
+    <SidebarLayout>
+      <div className="flex items-center justify-center h-64"><LoadingSpinner /></div>
     </SidebarLayout>
   )
 
@@ -352,8 +381,8 @@ export default function SiteDetailPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-gray-900 leading-tight">{site.name}</h1>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-bold text-gray-900 leading-tight break-words">{site.name}</h1>
                     {canAssign && (
                       <button onClick={openNameEditor}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 shrink-0"

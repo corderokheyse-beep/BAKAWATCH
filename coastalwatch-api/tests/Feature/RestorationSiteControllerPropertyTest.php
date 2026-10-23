@@ -85,6 +85,31 @@ function makeSite(array $overrides = []): RestorationSite
     ], $overrides));
 }
 
+test('site detail returns survival analytics when replacement records are present', function () {
+    $site = makeSite();
+    $submitter = User::factory()->create(['role' => 'field_worker']);
+
+    foreach ([false, true] as $isReplacement) {
+        PlantationRecord::create([
+            'restoration_site_id' => $site->id,
+            'submitted_by' => $submitter->id,
+            'species_name' => 'Rhizophora mucronata',
+            'date_planted' => '2025-01-15',
+            'latitude' => 12.9,
+            'longitude' => 121.5,
+            'is_replacement' => $isReplacement,
+        ]);
+    }
+
+    $this->getJson("/api/sites/{$site->id}")
+        ->assertOk()
+        ->assertJsonPath('site.id', $site->id)
+        ->assertJsonPath('plantation_count', 2)
+        ->assertJsonPath('survival.total', 2)
+        ->assertJsonPath('survival.replacement_count', 1)
+        ->assertJsonPath('survival.denominator', 1);
+});
+
 // ---------------------------------------------------------------------------
 // Property 3: Geometry storage round-trip
 //
@@ -117,6 +142,7 @@ test('Property 3: Geometry storage round-trip — lat/lon values are stored and 
             'restoration_site_id' => $site->id,
             'species_name'        => 'Rhizophora apiculata',
             'date_planted'        => now()->toDateString(),
+            'seedling_source'     => 'Nursery',
             'latitude'            => $lat,
             'longitude'           => $lon,
         ]);

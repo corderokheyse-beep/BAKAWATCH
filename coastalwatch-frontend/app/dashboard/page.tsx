@@ -53,7 +53,7 @@ export default function DashboardPage() {
       <div className="page-container">
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">
               {format(new Date(), 'EEEE, MMMM d, yyyy')}

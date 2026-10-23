@@ -30,15 +30,15 @@ export default function StatCard({
     )}>
       {/* Icon — floats gently on hover */}
       <div className={cn(
-        'p-2.5 rounded-xl shrink-0 transition-transform duration-300',
+        'p-2 sm:p-2.5 rounded-xl shrink-0 transition-transform duration-300',
         'group-hover:scale-110',
         bgColor,
       )}>
-        <Icon className={cn('w-5 h-5 transition-transform duration-300', color)} />
+        <Icon className={cn('w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-300', color)} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">
+        <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide leading-tight line-clamp-2 min-h-[2rem] break-words">
           {title}
         </p>
         <p className={cn(

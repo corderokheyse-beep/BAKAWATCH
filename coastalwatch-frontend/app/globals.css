@@ -58,7 +58,12 @@
     @apply card hover:shadow-[0_4px_16px_rgba(0,0,0,0.09)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer;
   }
   .stat-card {
-    @apply bg-white rounded-2xl border border-gray-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-5 flex items-start gap-4;
+    @apply bg-white rounded-2xl border border-gray-100/80 shadow-[0_1px_4px_rgba(0,0,0,0.06)] p-3 flex items-start gap-3;
+  }
+  @screen sm {
+    .stat-card {
+      @apply p-5 gap-4;
+    }
   }
 
   /* ── Form controls ───────────────────────────────────────────────────────── */

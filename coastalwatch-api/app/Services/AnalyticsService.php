@@ -31,7 +31,7 @@ class AnalyticsService
         $hasReplacementCol = $this->columnExists('plantation_records', 'is_replacement');
         // Expression evaluated inside COUNT(CASE WHEN ...): use the real column
         // when present, otherwise a constant that never matches.
-        $replacementExpr = $hasReplacementCol ? 'pr.is_replacement' : '0';
+        $replacementExpr = $hasReplacementCol ? 'pr.is_replacement' : 'FALSE';
 
         $row = DB::selectOne(
             "SELECT
@@ -39,7 +39,7 @@ class AnalyticsService
                 COUNT(mr_last.survival_status) AS monitored,
                 COUNT(CASE WHEN mr_last.survival_status = 'alive' THEN 1 END) AS alive_count,
                 COUNT(CASE WHEN mr_last.survival_status = 'dead'  THEN 1 END) AS dead_count,
-                COUNT(CASE WHEN {$replacementExpr} = 1 THEN 1 END) AS replacement_count
+                COUNT(CASE WHEN {$replacementExpr} IS TRUE THEN 1 END) AS replacement_count
             FROM plantation_records pr
             LEFT JOIN (
                 SELECT mr.plantation_record_id, mr.survival_status,
