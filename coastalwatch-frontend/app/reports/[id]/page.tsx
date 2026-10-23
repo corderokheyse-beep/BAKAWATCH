@@ -33,7 +33,7 @@ export default function ReportDetailPage() {
   const [reviewing, setReviewing] = useState(false)
   const [notes, setNotes]         = useState('')
   const [reanalyzing, setReanalyzing] = useState(false)
-  const [lightbox, setLightbox]       = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   // Derived after state declarations so `report` is in scope.
@@ -108,11 +108,11 @@ export default function ReportDetailPage() {
 
   // Close the lightbox on Escape.
   useEffect(() => {
-    if (!lightbox) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightbox(false) }
+    if (!lightboxUrl) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxUrl(null) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox])
+  }, [lightboxUrl])
 
   if (loading) return <SidebarLayout><LoadingSpinner /></SidebarLayout>
   if (!report) return null
@@ -123,6 +123,9 @@ export default function ReportDetailPage() {
 
   // Owner may add/replace the photo while the report is still pending; staff always may.
   const canEditPhoto = isStaff || (user?.id === report.user_id && report.status === 'pending')
+  const reportPhotoUrls = report.photos?.length
+    ? report.photos.map(photo => photo.url)
+    : report.image_url ? [report.image_url] : []
 
   return (
     <SidebarLayout>
@@ -134,25 +137,28 @@ export default function ReportDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
           {/* ── Main content ─────────────────────────────────────────────── */}
           <div className="lg:col-span-8 space-y-6">
-            {report.image_url && (
+            {reportPhotoUrls.length > 0 && (
               <div className="card p-0 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setLightbox(true)}
-                  className="relative w-full bg-gray-900/90 flex items-center justify-center cursor-zoom-in group"
-                  style={{ minHeight: '18rem', maxHeight: '32rem' }}
-                  title="Click to view full size"
-                >
-                  {/* Full image, never cropped */}
-                  <img
-                    src={report.image_url}
-                    alt={report.title}
-                    className="max-h-[32rem] w-auto max-w-full object-contain"
-                  />
-                  <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 text-[11px] font-medium text-white bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Maximize2 className="w-3 h-3" /> View full size
-                  </span>
-                </button>
+                <div className={cn('grid gap-1 bg-gray-900/90', reportPhotoUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1')}>
+                  {reportPhotoUrls.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      onClick={() => setLightboxUrl(url)}
+                      className="relative min-h-48 max-h-[32rem] bg-gray-900 flex items-center justify-center cursor-zoom-in group"
+                      title="Click to view full size"
+                    >
+                      <img
+                        src={url}
+                        alt={`${report.title} photo ${index + 1}`}
+                        className="max-h-[32rem] w-auto max-w-full object-contain"
+                      />
+                      <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 text-[11px] font-medium text-white bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Maximize2 className="w-3 h-3" /> View full size
+                      </span>
+                    </button>
+                  ))}
+                </div>
                 {canEditPhoto && (
                   <div className="px-4 py-2.5 border-t border-gray-100 flex justify-end">
                     <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-700 cursor-pointer">
@@ -341,13 +347,13 @@ export default function ReportDetailPage() {
       </div>
 
       {/* ── Full-screen image lightbox ──────────────────────────────────── */}
-      {lightbox && report.image_url && (
+      {lightboxUrl && (
         <div
           className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
-          onClick={() => setLightbox(false)}
+          onClick={() => setLightboxUrl(null)}
         >
           <button
-            onClick={() => setLightbox(false)}
+            onClick={() => setLightboxUrl(null)}
             className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
             aria-label="Close"
           >
@@ -355,7 +361,7 @@ export default function ReportDetailPage() {
           </button>
           {/* stopPropagation so clicking the image itself doesn't close it */}
           <img
-            src={report.image_url}
+            src={lightboxUrl}
             alt={report.title}
             className="max-h-[92vh] max-w-[92vw] w-auto h-auto object-contain rounded-lg shadow-2xl"
             onClick={e => e.stopPropagation()}

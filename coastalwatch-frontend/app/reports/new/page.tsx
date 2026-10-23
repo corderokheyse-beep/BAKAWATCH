@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -48,6 +48,11 @@ interface MLResult {
   all_predictions: MLPrediction[]
 }
 
+interface SelectedPhoto {
+  file: File
+  preview: string
+}
+
 // Confidence tier styling
 function confidenceTier(pct: number): { label: string; color: string; bg: string; border: string } {
   if (pct >= 80) return { label: 'High confidence',   color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300' }
@@ -61,8 +66,9 @@ export default function NewReportPage() {
 
   const [lat, setLat]               = useState<number | null>(null)
   const [lng, setLng]               = useState<number | null>(null)
-  const [imageFile, setImageFile]   = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [selectedPhotos, setSelectedPhotos] = useState<SelectedPhoto[]>([])
+  const selectedPhotosRef = useRef<SelectedPhoto[]>([])
+  const analysisRequest = useRef(0)
   const [mlResult, setMlResult]     = useState<MLResult | null>(null)
   const [mlLoading, setMlLoading]   = useState(false)
   const [mlError, setMlError]       = useState(false)
@@ -81,6 +87,10 @@ export default function NewReportPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => () => {
+    selectedPhotosRef.current.forEach(photo => URL.revokeObjectURL(photo.preview))
+  }, [])
+
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { category: 'other' },
@@ -94,11 +104,8 @@ export default function NewReportPage() {
   if (!user) return null
 
   // -- Image selection + instant ML species detection ----------------------------
-  async function handleImage(file: File) {
-    if (file.size > 10 * 1024 * 1024) { toast.error('Image must be under 10MB'); return }
-
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
+  async function analyzePhoto(file: File) {
+    const requestId = ++analysisRequest.current
     setMlResult(null)
     setMlError(false)
     setShowAllPredictions(false)
@@ -122,6 +129,7 @@ export default function NewReportPage() {
         needs_verification: data.needs_verification ?? false,
         all_predictions:    data.all_predictions    ?? [],
       }
+      if (requestId !== analysisRequest.current) return
       setMlResult(result)
       // Pre-select the AI's confident guess; leave blank when uncertain so the
       // reporter is nudged to choose manually.
@@ -129,19 +137,64 @@ export default function NewReportPage() {
         setManualSpecies(result.predicted_species ?? '')
       }
     } catch {
-      setMlError(true)
+      if (requestId === analysisRequest.current) setMlError(true)
     } finally {
-      setMlLoading(false)
+      if (requestId === analysisRequest.current) setMlLoading(false)
     }
   }
 
-  function clearImage() {
-    setImageFile(null)
-    setImagePreview(null)
+  function addPhotos(files: File[]) {
+    const current = selectedPhotosRef.current
+    if (current.length + files.length > 5) {
+      toast.error(`You can add up to 5 photos. ${5 - current.length} slot(s) remain.`)
+      return
+    }
+    if (files.some(file => file.size > 10 * 1024 * 1024)) {
+      toast.error('Each image must be under 10MB.')
+      return
+    }
+    const added = files.map(file => ({ file, preview: URL.createObjectURL(file) }))
+    const next = [...current, ...added]
+    selectedPhotosRef.current = next
+    setSelectedPhotos(next)
+    if (current.length === 0 && added.length) void analyzePhoto(added[0].file)
+  }
+
+  function removePhoto(index: number) {
+    const current = selectedPhotosRef.current
+    const removed = current[index]
+    if (!removed) return
+    URL.revokeObjectURL(removed.preview)
+    const next = current.filter((_, photoIndex) => photoIndex !== index)
+    selectedPhotosRef.current = next
+    setSelectedPhotos(next)
+    if (index === 0) {
+      if (next.length) void analyzePhoto(next[0].file)
+      else {
+        analysisRequest.current++
+        setMlResult(null)
+        setMlLoading(false)
+        setMlError(false)
+        setShowAllPredictions(false)
+        setManualSpecies('')
+      }
+    }
+  }
+
+  function clearPhotos() {
+    selectedPhotosRef.current.forEach(photo => URL.revokeObjectURL(photo.preview))
+    selectedPhotosRef.current = []
+    setSelectedPhotos([])
+    analysisRequest.current++
     setMlResult(null)
+    setMlLoading(false)
     setMlError(false)
     setShowAllPredictions(false)
     setManualSpecies('')
+  }
+
+  function handleImage(file: File) {
+    addPhotos([file])
   }
 
   // -- Form submit ----------------------------------------------------------------
@@ -153,7 +206,7 @@ export default function NewReportPage() {
       Object.entries(data).forEach(([k, v]) => v && formData.append(k, String(v)))
       formData.append('latitude',  String(lat))
       formData.append('longitude', String(lng))
-      if (imageFile) formData.append('image', imageFile)
+      selectedPhotos.forEach(photo => formData.append('photos[]', photo.file))
       // The reporter's confirmed/overridden species (human-verified).
       if (manualSpecies) formData.append('human_verified_species', manualSpecies)
 
@@ -260,11 +313,38 @@ export default function NewReportPage() {
             {/* PhotoCapture: live camera or file upload */}
             <PhotoCapture
               onPhoto={handleImage}
-              onClear={clearImage}
-              preview={imagePreview}
-              hint="JPG, PNG, WebP, HEIC — max 10MB"
+              onPhotos={addPhotos}
+              onClear={clearPhotos}
+              preview={selectedPhotos[0]?.preview}
+              multiple
+              hint="Upload up to 5 images — JPG, PNG, WebP, or HEIC, max 10MB each. AI analyzes the first image."
               maxMB={10}
             />
+            {selectedPhotos.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-600 mb-2">
+                  {selectedPhotos.length} of 5 photos selected
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {selectedPhotos.map((photo, index) => (
+                    <div key={`${photo.file.name}-${index}`} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                      <img src={photo.preview} alt={`Selected report photo ${index + 1}`} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {index === 0 ? 'AI photo' : `Photo ${index + 1}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(index)}
+                        aria-label={`Remove photo ${index + 1}`}
+                        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-red-600 shadow"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Loading state */}
             {mlLoading && (

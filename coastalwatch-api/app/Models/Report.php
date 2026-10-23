@@ -18,6 +18,7 @@ class Report extends Model
 
     protected $fillable = [
         'user_id', 'title', 'description', 'image_url', 'image_public_id',
+        'photos',
         'latitude', 'longitude', 'location_name', 'status', 'category', 'report_type', 'threat_type',
         'severity', 'affected_radius_m',
         'admin_notes', 'reviewed_by', 'reviewed_at',
@@ -33,6 +34,7 @@ class Report extends Model
         'reviewed_at'       => 'datetime',
         'ml_confidence'     => 'float',
         'ml_analyzed'       => 'boolean',
+        'photos'            => 'array',
         'verified_at'       => 'datetime',
     ];
 

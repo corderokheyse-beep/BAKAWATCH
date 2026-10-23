@@ -94,24 +94,43 @@ class ReportController extends Controller
             // (mimetypes) rather than extension so files like image/jpeg saved
             // as .jfif are still accepted. Up to 10 MB.
             'image'         => 'nullable|file|mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif|max:10240',
+            'photos'        => 'sometimes|array|max:5',
+            'photos.*'      => 'file|mimetypes:image/jpeg,image/png,image/webp,image/heic,image/heif|max:10240',
         ], [
             'image.mimetypes' => 'The photo must be a JPEG, PNG, WebP, or HEIC image.',
             'image.max'       => 'The photo must be 10 MB or smaller.',
+            'photos.max'      => 'You can upload up to 5 photos.',
+            'photos.*.mimetypes' => 'Each photo must be a JPEG, PNG, WebP, or HEIC image.',
+            'photos.*.max'    => 'Each photo must be 10 MB or smaller.',
         ]);
 
+        $photos = $request->file('photos', []);
+        if (! $photos && $request->hasFile('image')) {
+            $photos = [$request->file('image')];
+        }
+
+        $photoData = [];
+        foreach ($photos as $photo) {
+            $result = $this->cloudinary->upload($photo, 'reports');
+            $photoData[] = [
+                'url' => $result['secure_url'],
+                'public_id' => $result['public_id'],
+            ];
+        }
+
         $imageData = [];
-        if ($request->hasFile('image')) {
-            $result = $this->cloudinary->upload($request->file('image'), 'reports');
+        if ($photoData) {
             $imageData = [
-                'image_url'       => $result['secure_url'],
-                'image_public_id' => $result['public_id'],
+                'image_url'       => $photoData[0]['url'],
+                'image_public_id' => $photoData[0]['public_id'],
+                'photos'          => $photoData,
             ];
         }
 
         // ── ML analysis — run on the uploaded image before saving ─────────────
         $mlData = [];
-        if ($request->hasFile('image')) {
-            $analysis = $this->ml->analyze($request->file('image'));
+        if ($photos) {
+            $analysis = $this->ml->analyze($photos[0]);
             if ($analysis) {
                 // Store the model's actual top guess (predicted_species) even when
                 // it fell below the confidence threshold and reported "Uncertain".
@@ -219,6 +238,14 @@ class ReportController extends Controller
             $result = $this->cloudinary->upload($request->file('image'), 'reports');
             $validated['image_url'] = $result['secure_url'];
             $validated['image_public_id'] = $result['public_id'];
+            $existingPhotos = $report->photos ?? [];
+            $validated['photos'] = array_merge(
+                [['url' => $result['secure_url'], 'public_id' => $result['public_id']]],
+                array_values(array_filter(
+                    $existingPhotos,
+                    fn ($photo) => ($photo['public_id'] ?? null) !== $report->image_public_id,
+                )),
+            );
 
             // Re-run AI species detection on the new image (best-effort).
             $analysis = $this->ml->analyze($request->file('image'));
@@ -475,8 +502,13 @@ class ReportController extends Controller
     {
         $this->authorize('delete', $report);
 
-        if ($report->image_public_id) {
-            $this->cloudinary->delete($report->image_public_id);
+        $publicIds = collect($report->photos ?? [])
+            ->pluck('public_id')
+            ->push($report->image_public_id)
+            ->filter()
+            ->unique();
+        foreach ($publicIds as $publicId) {
+            $this->cloudinary->delete($publicId);
         }
 
         $report->delete();

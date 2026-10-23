@@ -56,6 +56,7 @@ export interface Report {
   title: string
   description: string
   image_url?: string
+  photos?: { url: string; public_id?: string }[] | null
   latitude: number | null
   longitude: number | null
   location_name?: string

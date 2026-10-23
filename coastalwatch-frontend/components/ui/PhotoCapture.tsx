@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils'
 
 interface PhotoCaptureProps {
   onPhoto: (file: File) => void
+  onPhotos?: (files: File[]) => void
   onClear?: () => void
   preview?: string | null
+  multiple?: boolean
   label?: string
   hint?: string
   maxMB?: number
@@ -18,8 +20,10 @@ type Mode = 'idle' | 'camera' | 'preview'
 
 export default function PhotoCapture({
   onPhoto,
+  onPhotos,
   onClear,
   preview,
+  multiple = false,
   label = 'Photo',
   hint = 'JPG, PNG, WebP, HEIC — max 10MB',
   maxMB = 10,
@@ -37,7 +41,7 @@ export default function PhotoCapture({
 
   // Sync preview prop → mode
   useEffect(() => {
-    if (preview) setMode('preview')
+    setMode(preview ? 'preview' : 'idle')
   }, [preview])
 
   // Stop camera stream when unmounted or mode changes away from 'camera'
@@ -122,18 +126,20 @@ export default function PhotoCapture({
   }, [streaming, maxMB, onPhoto])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > maxMB * 1024 * 1024) {
-      setCameraError(`File exceeds ${maxMB}MB limit.`)
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+    const oversizedFile = files.find(file => file.size > maxMB * 1024 * 1024)
+    if (oversizedFile) {
+      setCameraError(`${oversizedFile.name} exceeds ${maxMB}MB limit.`)
       return
     }
-    onPhoto(file)
+    if (multiple && onPhotos) onPhotos(files)
+    else onPhoto(files[0])
     setMode('preview')
     setCameraError(null)
     // Reset input so the same file can be re-selected
     e.target.value = ''
-  }, [maxMB, onPhoto])
+  }, [maxMB, multiple, onPhoto, onPhotos])
 
   const handleClear = useCallback(() => {
     stopStream()
@@ -175,13 +181,14 @@ export default function PhotoCapture({
               <Upload className="w-6 h-6 text-gray-500" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-bold text-gray-600">Upload Photo</p>
+              <p className="text-sm font-bold text-gray-600">{multiple ? 'Upload Photos' : 'Upload Photo'}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">From gallery / files</p>
             </div>
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
+              multiple={multiple}
               className="hidden"
               onChange={handleFileChange}
             />
@@ -225,7 +232,7 @@ export default function PhotoCapture({
                 <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-gray-800 text-xs font-bold cursor-pointer hover:bg-gray-100 transition-colors">
                   <Upload className="w-3.5 h-3.5" />
                   Upload instead
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                  <input type="file" accept="image/*" multiple={multiple} className="hidden" onChange={handleFileChange} />
                 </label>
               </div>
             </div>
@@ -283,8 +290,8 @@ export default function PhotoCapture({
           {/* Upload alternative */}
           <label className="btn-secondary text-sm px-4 cursor-pointer inline-flex items-center gap-1.5">
             <Upload className="w-3.5 h-3.5" />
-            Upload
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            {multiple ? 'Add photos' : 'Upload'}
+            <input type="file" accept="image/*" multiple={multiple} className="hidden" onChange={handleFileChange} />
           </label>
         </div>
 
@@ -333,8 +340,8 @@ export default function PhotoCapture({
           <Camera className="w-3.5 h-3.5" /> Retake
         </button>
         <label className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors cursor-pointer">
-          <Upload className="w-3.5 h-3.5" /> Upload different
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+          <Upload className="w-3.5 h-3.5" /> {multiple ? 'Add photos' : 'Upload different'}
+          <input type="file" accept="image/*" multiple={multiple} className="hidden" onChange={handleFileChange} />
         </label>
       </div>
     </div>

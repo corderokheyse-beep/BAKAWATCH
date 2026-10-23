@@ -167,12 +167,12 @@ export default function ReportsPage() {
                   href={`/reports/${report.id}`}
                   className="block"
                 >
-                  {report.image_url ? (
+                  {report.photos?.[0]?.url || report.image_url ? (
                     <div className="relative h-44 w-full overflow-hidden bg-gray-100">
                       {/* Plain <img> (not next/image) so locally-served API image URLs
                           load directly instead of 400ing through the Next optimizer. */}
                       <img
-                        src={report.image_url}
+                        src={report.photos?.[0]?.url ?? report.image_url}
                         alt={report.title}
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
