@@ -40,6 +40,18 @@ export default function EventAccomplishmentPage() {
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), [])
 
   useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      position => setCoordinates(current => current ?? {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      }),
+      () => {},
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
+    )
+  }, [])
+
+  useEffect(() => {
     if (authLoading) return
     if (!user || user.role !== 'field_worker') { router.replace('/login'); return }
     Promise.all([fetchPastEvents(), fetchSpecies(), api.get(`/events/${eventId}/accomplishments/mine`).catch(() => ({ data: null }))])

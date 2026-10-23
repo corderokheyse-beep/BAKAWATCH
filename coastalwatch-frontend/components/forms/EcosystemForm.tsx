@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -28,6 +28,8 @@ interface Props {
 
 export default function EcosystemForm({ sites, onSuccess }: Props) {
   const [gpsError, setGpsError]     = useState('')
+  const [gpsLoading, setGpsLoading] = useState(true)
+  const [gpsLocated, setGpsLocated] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
@@ -35,20 +37,40 @@ export default function EcosystemForm({ sites, onSuccess }: Props) {
     resolver: zodResolver(schema),
   })
 
-  const captureGPS = () => {
+  const captureGPS = useCallback(() => {
     setGpsError('')
-    if (!navigator.geolocation) {
-      setGpsError('GPS not available')
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setGpsError('GPS requires a secure HTTPS connection. Enter coordinates manually or use the deployed HTTPS site.')
+      setGpsLoading(false)
       return
     }
+    if (!navigator.geolocation) {
+      setGpsError('Location services are unavailable in this browser.')
+      setGpsLoading(false)
+      return
+    }
+    setGpsLoading(true)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setValue('latitude',  pos.coords.latitude,  { shouldValidate: true })
         setValue('longitude', pos.coords.longitude, { shouldValidate: true })
+        setGpsLocated(true)
+        setGpsLoading(false)
       },
-      () => setGpsError('Unable to retrieve location'),
+      (error) => {
+        setGpsLocated(false)
+        setGpsLoading(false)
+        setGpsError(error.code === error.PERMISSION_DENIED
+          ? 'Location permission is blocked. Allow access in browser settings, or enter coordinates manually.'
+          : 'Could not determine your location. Turn on device location or enter coordinates manually.')
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 },
     )
-  }
+  }, [setValue])
+
+  useEffect(() => {
+    captureGPS()
+  }, [captureGPS])
 
   const onSubmit = async (values: FormValues) => {
     setSubmitting(true)
@@ -134,10 +156,11 @@ export default function EcosystemForm({ sites, onSuccess }: Props) {
 
       <div>
         <label className="label">Location (optional)</label>
-        <button type="button" onClick={captureGPS} className="btn-secondary text-sm mb-2">
-          📍 Capture GPS Location
+        <button type="button" onClick={captureGPS} disabled={gpsLoading} className="btn-secondary text-sm mb-2">
+          {gpsLoading ? 'Finding GPS location…' : gpsLocated ? 'Refresh GPS Location' : 'Capture GPS Location'}
         </button>
-        {gpsError && <p className="text-red-500 text-xs mb-2">{gpsError}</p>}
+        {gpsError && <p role="status" className="text-amber-700 text-xs mb-2">{gpsError}</p>}
+        {gpsLocated && <p className="text-green-700 text-xs mb-2">Current device location captured. You can adjust the coordinates below.</p>}
         <div className="grid grid-cols-2 gap-2">
           <input type="number" step="any" className="input" placeholder="Latitude" {...register('latitude', { valueAsNumber: true })} />
           <input type="number" step="any" className="input" placeholder="Longitude" {...register('longitude', { valueAsNumber: true })} />

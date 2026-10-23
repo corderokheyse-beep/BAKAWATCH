@@ -146,7 +146,7 @@ export default function NewReportPage() {
 
   // -- Form submit ----------------------------------------------------------------
   async function onSubmit(data: FormData) {
-    if (!lat || !lng) { toast.error('Please select a location on the map'); return }
+    if (lat == null || lng == null) { toast.error('Wait for GPS or pin a location on the map'); return }
 
     try {
       const formData = new FormData()
