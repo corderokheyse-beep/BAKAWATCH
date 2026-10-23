@@ -8,7 +8,7 @@ python-multipart==0.0.9
 # (tensorflow 2.17.0 only supported up to Python 3.11)
 tensorflow==2.21.0
 pillow==11.2.1
-numpy==2.0.2
+numpy==2.1.3
 
 # HTTP client (used by Laravel proxy + dataset downloader)
 requests==2.32.3
