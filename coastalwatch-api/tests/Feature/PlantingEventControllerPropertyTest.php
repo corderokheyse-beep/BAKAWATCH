@@ -75,6 +75,27 @@ function pec_makeEvent(RestorationSite $site, array $overrides = []): PlantingEv
     ], $overrides));
 }
 
+test('MENRO all-events endpoint returns participant details', function () {
+    $site = pec_makeSite();
+    $event = pec_makeEvent($site);
+    $registration = EventRegistration::create([
+        'planting_event_id' => $event->id,
+        'full_name' => 'Test Participant',
+        'email' => 'participant@example.test',
+        'organization' => 'Community Group',
+        'age' => 28,
+        'registration_status' => 'confirmed',
+    ]);
+
+    $this->actingAs(pec_makeMenro())
+        ->getJson('/api/events/all')
+        ->assertOk()
+        ->assertJsonPath('0.id', $event->id)
+        ->assertJsonPath('0.registrations.0.id', $registration->id)
+        ->assertJsonPath('0.registrations.0.organization', 'Community Group')
+        ->assertJsonPath('0.registrations.0.age', 28);
+});
+
 // ---------------------------------------------------------------------------
 // Property 15: Event registration is recorded
 //
