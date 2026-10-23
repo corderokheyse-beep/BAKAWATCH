@@ -7,12 +7,11 @@ use App\Models\PlantationRecord;
 use App\Models\RestorationSite;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Seeds the real Gloria, Oriental Mindoro coastal mangrove sites so the Map,
- * Sites, and Analytics pages have data to display. These are actual barangays
- * of Gloria with representative boundaries.
+ * Seeds Gloria barangay-center starter markers so the Map, Sites, and Analytics
+ * pages have data to display. These are not surveyed restoration-site GPS or
+ * boundary records.
  *
  * It also seeds a small set of plantation + monitoring records on the first
  * site so the Analytics survival-rate / species / growth charts render. This is
@@ -36,18 +35,18 @@ class StarterSitesSeeder extends Seeder
         $fieldId = User::where('role', 'field_worker')->where('is_active', true)->first()?->id ?? $adminId;
 
         $sites = [
-            ['Agsalin Mangrove Reserve',            'Agsalin',      16.8, 2020, 12.9280, 121.5020, 'POLYGON((121.4990 12.9260, 121.5060 12.9260, 121.5060 12.9310, 121.4990 12.9310, 121.4990 12.9260))'],
-            ['Maragooc Coastal Mangrove Zone',      'Maragooc',      8.5, 2021, 12.9380, 121.5050, 'POLYGON((121.5020 12.9360, 121.5090 12.9360, 121.5090 12.9410, 121.5020 12.9410, 121.5020 12.9360))'],
-            ['Guimbonan Mangrove Belt',             'Guimbonan',     6.2, 2022, 12.9480, 121.5080, 'POLYGON((121.5050 12.9460, 121.5120 12.9460, 121.5120 12.9510, 121.5050 12.9510, 121.5050 12.9460))'],
-            ['Sta. Theresa Fish Sanctuary',         'Sta. Theresa', 38.1, 2018, 12.9580, 121.5100, 'POLYGON((121.5060 12.9540, 121.5160 12.9540, 121.5160 12.9630, 121.5060 12.9630, 121.5060 12.9540))'],
-            ['Balete Mangrove Restoration Site',    'Balete',        4.5, 2023, 12.9680, 121.4900, 'POLYGON((121.4870 12.9660, 121.4930 12.9660, 121.4930 12.9700, 121.4870 12.9700, 121.4870 12.9660))'],
-            ['San Antonio Coastal Mangrove Area',   'San Antonio',   7.0, 2021, 12.9720, 121.5120, 'POLYGON((121.5090 12.9700, 121.5160 12.9700, 121.5160 12.9750, 121.5090 12.9750, 121.5090 12.9700))'],
-            ['Kawit Shoreline Mangrove Project',    'Kawit',         5.8, 2022, 12.9760, 121.4860, 'POLYGON((121.4830 12.9740, 121.4900 12.9740, 121.4900 12.9780, 121.4830 12.9780, 121.4830 12.9740))'],
-            ['Tambong Mangrove Conservation Zone',  'Tambong',       9.3, 2019, 12.9950, 121.5150, 'POLYGON((121.5120 12.9920, 121.5200 12.9920, 121.5200 12.9980, 121.5120 12.9980, 121.5120 12.9920))'],
+            ['Agsalin Mangrove Reserve',            'Agsalin',      16.8, 2020, 12.8838292, 121.4727700],
+            ['Maragooc Coastal Mangrove Zone',      'Maragooc',      8.5, 2021, 12.8965308, 121.4728645],
+            ['Guimbonan Mangrove Belt',             'Guimbonan',     6.2, 2022, 12.9051536, 121.4748765],
+            ['Sta. Theresa Fish Sanctuary',         'Sta. Theresa', 38.1, 2018, 12.9179488, 121.4821010],
+            ['Balete Mangrove Restoration Site',    'Balete',        4.5, 2023, 12.9349593, 121.4714367],
+            ['San Antonio Coastal Mangrove Area',   'San Antonio',   7.0, 2021, 12.9450137, 121.4926727],
+            ['Kawit Shoreline Mangrove Project',    'Kawit',         5.8, 2022, 12.9624753, 121.4811897],
+            ['Tambong Mangrove Conservation Zone',  'Tambong',       9.3, 2019, 12.9720401, 121.4888646],
         ];
 
         $firstSite = null;
-        foreach ($sites as [$name, $barangay, $area, $year, $lat, $lng, $polygon]) {
+        foreach ($sites as [$name, $barangay, $area, $year, $lat, $lng]) {
             if (RestorationSite::where('name', $name)->exists()) {
                 if (! $firstSite) $firstSite = RestorationSite::where('name', $name)->first();
                 continue;
@@ -55,7 +54,7 @@ class StarterSitesSeeder extends Seeder
             $site = RestorationSite::create([
                 'created_by'       => $adminId,
                 'name'             => $name,
-                'description'      => "Mangrove restoration site in Barangay {$barangay}, Gloria, Oriental Mindoro.",
+                'description'      => "Starter site marker at the approximate center of Barangay {$barangay}, Gloria, Oriental Mindoro. Replace with verified site GPS and boundary data before operational use.",
                 'area_hectares'    => $area,
                 'barangay'         => $barangay,
                 'status'           => 'active',
@@ -63,13 +62,6 @@ class StarterSitesSeeder extends Seeder
                 'latitude'         => $lat,
                 'longitude'        => $lng,
             ]);
-            // Store PostGIS boundary (PostgreSQL only; skipped on SQLite).
-            if (DB::getDriverName() !== 'sqlite') {
-                try { DB::statement(
-                    "UPDATE restoration_sites SET boundary = ST_GeomFromText(?, 4326) WHERE id = ?",
-                    [$polygon, $site->id]
-                ); } catch (\Throwable $e) {}
-            }
             if (! $firstSite) $firstSite = $site;
         }
 

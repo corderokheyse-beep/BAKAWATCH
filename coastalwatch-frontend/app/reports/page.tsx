@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 export default function ReportsPage() {
   const { user, isFieldWorker } = useAuth()
   const isBantayBakawan = isFieldWorker || user?.role === 'volunteer'
+  const canReviewReports = ['admin', 'staff', 'menro'].includes(user?.role ?? '')
   const [mounted, setMounted]   = useState(false)
   const [data, setData]         = useState<PaginatedResponse<Report> | null>(null)
   const [loading, setLoading]   = useState(true)
@@ -207,7 +208,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 </Link>
-                {isBantayBakawan && <Link href={`/reports/${report.id}#timeline`} className="m-4 mt-0 min-h-10 inline-flex items-center justify-center rounded-xl border border-primary-200 px-4 text-sm font-semibold text-primary-700 hover:bg-primary-50">Add Update</Link>}
+                {(canReviewReports || (isBantayBakawan && report.user_id === user?.id)) && <Link href={`/reports/${report.id}#timeline`} className="m-4 mt-0 min-h-10 inline-flex items-center justify-center rounded-xl border border-primary-200 px-4 text-sm font-semibold text-primary-700 hover:bg-primary-50">Add Update</Link>}
                 </article>
               ))}
             </div>

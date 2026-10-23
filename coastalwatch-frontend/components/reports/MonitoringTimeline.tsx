@@ -21,7 +21,7 @@ interface TimelineData { report: Report; before_photo: string | null; after_phot
 
 export default function MonitoringTimeline({ reportId }: { reportId: number; reportStatus?: string; onStatusChange?: (status: string) => void }) {
   const { user } = useAuth()
-  const canAdd = !!user && ['field_worker', 'volunteer'].includes(user.role)
+  const canReview = !!user && ['admin', 'staff', 'menro'].includes(user.role)
   const [data, setData] = useState<TimelineData | null>(null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -102,6 +102,7 @@ export default function MonitoringTimeline({ reportId }: { reportId: number; rep
 
   if (loading) return <div className="flex justify-center py-8"><LoadingSpinner /></div>
   if (!data) return <p className="text-sm text-gray-400 py-6 text-center">Monitoring timeline unavailable.</p>
+  const canAdd = canReview || (!!user && user.id === data.report.user_id && ['field_worker', 'volunteer'].includes(user.role))
   const isGrowth = data.report.report_type === 'event_accomplishment'
   const orderedUpdates = [...data.updates].sort((a, b) =>
     new Date(b.created_at || b.update_date).getTime() - new Date(a.created_at || a.update_date).getTime()

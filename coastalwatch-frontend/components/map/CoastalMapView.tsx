@@ -6,26 +6,22 @@ import { CATEGORY_ICONS } from '@/lib/utils'
 import { simpleZoneFor } from '@/lib/mangrove-zonation'
 
 // ── The 8 coastal barangays of Gloria, Oriental Mindoro ───────────────────────
-// The coastal barangays that host the 8 Gloria restoration sites. Coordinates
-// mirror the sites' own locations so the barangay label sits on its site.
-// (Previously this held fictional barangays with decorative emoji that did not
-// correspond to any real site — those have been removed.)
+// OpenStreetMap place-node coordinates for the eight coastal barangays hosting
+// Gloria's starter restoration sites. These are village-center pins, not
+// surveyed restoration-site boundaries or field observation coordinates.
 export const COASTAL_BARANGAYS: {
   name: string
   coords: [number, number]
   isHighlighted?: boolean
 }[] = [
-  // Coordinates corrected against the confirmed Agsalin location (Bing/TomTom
-  // ~12.8838,121.4728) and the real coastal barangay order. Pins sit on the
-  // shoreline just east of each barangay centre.
-  { name: 'Agsalin',      coords: [12.880514, 121.476902], isHighlighted: true },
-  { name: 'Maragooc',     coords: [12.895, 121.4775] },
-  { name: 'Guimbonan',    coords: [12.912, 121.4780] },
-  { name: 'Sta. Theresa', coords: [12.929, 121.4785] },
-  { name: 'Balete',       coords: [12.943, 121.4782] },
-  { name: 'San Antonio',  coords: [12.957, 121.4788] },
-  { name: 'Kawit',        coords: [12.971, 121.4790] },
-  { name: 'Tambong',      coords: [12.988, 121.4795] },
+  { name: 'Agsalin',      coords: [12.8838292, 121.4727700], isHighlighted: true },
+  { name: 'Maragooc',     coords: [12.8965308, 121.4728645] },
+  { name: 'Guimbonan',    coords: [12.9051536, 121.4748765] },
+  { name: 'Sta. Theresa', coords: [12.9179488, 121.4821010] },
+  { name: 'Balete',       coords: [12.9349593, 121.4714367] },
+  { name: 'San Antonio',  coords: [12.9450137, 121.4926727] },
+  { name: 'Kawit',        coords: [12.9624753, 121.4811897] },
+  { name: 'Tambong',      coords: [12.9720401, 121.4888646] },
 ]
 
 // Tight bounds covering only the coastal strip of Gloria
@@ -247,7 +243,7 @@ export default function CoastalMapView({
       const satellite = L.tileLayer(
         'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         {
-          attribution: 'Imagery © <a href="https://www.esri.com" target="_blank">Esri</a>, Maxar, Earthstar Geographics',
+          attribution: 'Imagery © <a href="https://www.esri.com" target="_blank">Esri</a>, Maxar, Earthstar Geographics · Barangay centers © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
           maxZoom: 19,
           crossOrigin: true,
         },

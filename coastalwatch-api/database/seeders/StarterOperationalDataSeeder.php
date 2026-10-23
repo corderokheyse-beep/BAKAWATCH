@@ -140,15 +140,15 @@ class StarterOperationalDataSeeder extends Seeder
                 'title' => 'SAMPLE: Mangrove shoreline inspection',
                 'description' => 'Demonstration report only. This does not document a verified incident or field observation.',
                 'category' => 'damage',
-                'latitude' => 12.9280,
-                'longitude' => 121.5020,
+                'latitude' => 12.8838292,
+                'longitude' => 121.4727700,
             ],
             [
                 'title' => 'SAMPLE: Community restoration activity',
                 'description' => 'Demonstration report only. Replace with verified field data before using this record operationally.',
                 'category' => 'restoration',
-                'latitude' => 12.9290,
-                'longitude' => 121.5030,
+                'latitude' => 12.8838292,
+                'longitude' => 121.4727700,
             ],
         ];
 
