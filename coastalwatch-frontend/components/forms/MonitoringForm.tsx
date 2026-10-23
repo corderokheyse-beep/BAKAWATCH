@@ -10,7 +10,10 @@ import { enqueueDraft, isNetworkError } from '@/lib/offline-queue'
 import { MapPin, Loader2, CheckCircle2, ClipboardList } from 'lucide-react'
 
 const schema = z.object({
-  plantation_record_id: z.number({ required_error: 'Select a plantation record' }),
+  plantation_record_id: z.number({
+    required_error: 'Select a plantation record',
+    invalid_type_error: 'Select a plantation record',
+  }).int().positive('Select a plantation record'),
   monitoring_date:      z.string().min(1),
   height_cm:            z.number().min(0, 'Must be >= 0'),
   diameter_cm:          z.number().min(0, 'Must be >= 0'),
@@ -53,8 +56,8 @@ export default function MonitoringForm({ plantationRecords, preselectedId, onSuc
     setGpsStatus('loading')
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setValue('latitude',  pos.coords.latitude,  { shouldValidate: true })
-        setValue('longitude', pos.coords.longitude, { shouldValidate: true })
+        setValue('latitude',  pos.coords.latitude)
+        setValue('longitude', pos.coords.longitude)
         setGpsStatus('ok')
       },
       () => setGpsStatus('error'),
@@ -72,8 +75,8 @@ export default function MonitoringForm({ plantationRecords, preselectedId, onSuc
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setValue('latitude',  pos.coords.latitude,  { shouldValidate: true })
-        setValue('longitude', pos.coords.longitude, { shouldValidate: true })
+        setValue('latitude',  pos.coords.latitude)
+        setValue('longitude', pos.coords.longitude)
         setGpsStatus('ok')
       },
       () => {
@@ -124,7 +127,9 @@ export default function MonitoringForm({ plantationRecords, preselectedId, onSuc
 
       <div>
         <label className="label">Plantation Record *</label>
-        <select className="input" {...register('plantation_record_id', { valueAsNumber: true })}>
+        <select className="input" {...register('plantation_record_id', {
+          setValueAs: value => value === '' ? undefined : Number(value),
+        })}>
           <option value="">Select a plantation record…</option>
           {plantationRecords.map(r => (
             <option key={r.id} value={r.id}>
