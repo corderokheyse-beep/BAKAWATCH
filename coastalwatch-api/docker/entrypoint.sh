@@ -12,5 +12,9 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
     php artisan migrate --force
 fi
 
+if [ "${RUN_STARTER_SITES_SEEDER:-false}" = "true" ]; then
+    php artisan db:seed --class='Database\Seeders\StarterSitesSeeder' --force
+fi
+
 php artisan config:cache
 exec apache2-foreground

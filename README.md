@@ -154,6 +154,8 @@ A practical hosted layout is:
 6. Set `NEXT_PUBLIC_API_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ML_SERVICE_URL`, and email settings to the production service URLs.
 7. Run database migrations during deployment with `php artisan migrate --force`. Seeders create sample users and data; review them and do not run them against production without removing or changing their default credentials.
 
+If Render Shell is unavailable, you can run the starter site seeder during an API deploy: set `RUN_STARTER_SITES_SEEDER=true` in the Render service's environment and redeploy (or save the environment change to restart the service). The entrypoint runs migrations first, then the seeder. Remove the variable or set it to `false` after the seeder completes, then redeploy/restart. The seeder is safe to rerun, but its sample coordinates and boundaries are representative, not verified survey data.
+
 Use HTTPS for all public services. Set `APP_DEBUG=false`, generate a unique `APP_KEY`, restrict CORS to the real frontend domain, configure durable backups, and use a queue worker if queued notifications are enabled. Test the deployed login, image upload, map, events, reports, and classifier endpoints before sharing the site.
 
 ## Tests and builds
