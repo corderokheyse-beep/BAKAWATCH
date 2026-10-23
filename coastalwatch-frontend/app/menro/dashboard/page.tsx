@@ -345,7 +345,7 @@ export default function MenroDashboardPage() {
                   <div key={report.id}
                     onClick={() => handleReportRowClick(report)}
                     className={cn(
-                      'group flex items-start gap-3 p-3.5 rounded-xl border border-transparent',
+                      'group grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 p-3.5 rounded-xl border border-transparent sm:flex',
                       'transition-all duration-200 ease-out cursor-pointer',
                       'hover:border-amber-200 hover:bg-amber-50/40 hover:shadow-sm hover:-translate-y-0.5',
                       reviewing === report.id && 'opacity-50 pointer-events-none',
@@ -354,7 +354,7 @@ export default function MenroDashboardPage() {
                                     group-hover:bg-amber-100 transition-colors duration-200">
                       <AlertTriangle className="w-4 h-4 text-amber-500" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="col-start-2 min-w-0 sm:flex-1">
                       <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-amber-900 transition-colors">
                         {report.title}
                       </p>
@@ -366,14 +366,14 @@ export default function MenroDashboardPage() {
                           {sev}
                         </span>
                         <Badge label={report.category} type="category" />
-                        <span className="text-xs text-gray-400">{timeAgo(report.created_at)}</span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{timeAgo(report.created_at)}</span>
                         {report.location_name && (
                           <span className="text-xs text-gray-400 truncate hidden sm:block">
                             · {report.location_name}
                           </span>
                         )}
                         {(report.latitude || report.lat) && (
-                          <span className="text-xs text-primary-500 flex items-center gap-0.5 font-medium">
+                          <span className="text-xs text-primary-500 flex items-center gap-0.5 font-medium whitespace-nowrap shrink-0">
                             <MapPin className="w-3 h-3" /> View on map
                           </span>
                         )}
@@ -381,7 +381,7 @@ export default function MenroDashboardPage() {
                     </div>
                     {isPending && (
                       <>
-                        <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        <div className="hidden sm:flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                              onClick={e => e.stopPropagation()}>
                           <button
                             onClick={() => reviewReport(report.id, 'resolved')}
@@ -403,14 +403,15 @@ export default function MenroDashboardPage() {
                           </button>
                         </div>
                         {/* Always-visible buttons on mobile */}
-                        <div className="flex gap-1.5 shrink-0 sm:hidden"
+                        <div className="col-start-2 flex w-full justify-end gap-1.5 sm:hidden"
                              onClick={e => e.stopPropagation()}>
                           <button onClick={() => reviewReport(report.id, 'resolved')} disabled={reviewing === report.id}
-                            title="Resolved"
+                            title="Resolved" aria-label="Mark report resolved"
                             className="p-1.5 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50">
                             <CheckCircle className="w-4 h-4" />
                           </button>
                           <button onClick={() => reviewReport(report.id, 'under_review')} disabled={reviewing === report.id}
+                            aria-label="Mark report under review"
                             className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
                             <Search className="w-4 h-4" />
                           </button>
