@@ -26,10 +26,14 @@ class StarterSitesSeeder extends Seeder
 {
     public function run(): void
     {
-        // Attribute created_by to an admin if one exists (nullable otherwise).
-        $admin = User::where('role', 'admin')->first();
-        $adminId = $admin?->id;
-        $fieldId = User::where('role', 'field_worker')->first()?->id ?? $adminId;
+        $admin = User::where('role', 'admin')->where('is_active', true)->first();
+        if (! $admin) {
+            throw new \RuntimeException(
+                'Cannot seed starter sites without an active admin. Set ADMIN_EMAIL and ADMIN_PASSWORD, then run ProductionSeeder first.'
+            );
+        }
+        $adminId = $admin->id;
+        $fieldId = User::where('role', 'field_worker')->where('is_active', true)->first()?->id ?? $adminId;
 
         $sites = [
             ['Agsalin Mangrove Reserve',            'Agsalin',      16.8, 2020, 12.9280, 121.5020, 'POLYGON((121.4990 12.9260, 121.5060 12.9260, 121.5060 12.9310, 121.4990 12.9310, 121.4990 12.9260))'],
