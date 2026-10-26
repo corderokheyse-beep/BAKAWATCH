@@ -136,7 +136,8 @@ Important API settings include:
 | `CORS_ALLOWED_ORIGINS` | Comma separated list of allowed frontend origins, including the production HTTPS domain. |
 | `FRONTEND_URL` | Frontend origin used for links such as password resets. |
 | `ML_SERVICE_URL` | URL of the FastAPI classifier. |
-| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Image upload storage credentials. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Preferred image upload storage credentials. |
+| `FILESYSTEM_DISK=s3`, `AWS_BUCKET`, `AWS_DEFAULT_REGION`, and AWS credentials (or an instance role) | Optional durable S3-compatible image storage when Cloudinary is not configured. Set `AWS_URL` when images are served through a CDN or custom public endpoint. |
 | `MAIL_*` | Production email provider settings for account and notification email. |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS` | Optional Firebase integration. Keep its service account key outside the repository. |
 
@@ -150,7 +151,7 @@ A practical hosted layout is:
 2. Deploy `coastalwatch-api/` to **Railway**, **Render**, or a managed PHP host.
 3. Provision managed PostgreSQL or MySQL and configure Laravel's `DB_*` variables.
 4. Deploy `ml-service/` as a separate Python web service if species detection is required.
-5. Configure Cloudinary for user uploads. Local-disk uploads are limited to local development and tests; hosted environments reject uploads when Cloudinary is not configured rather than returning URLs that will break after a restart or deployment.
+5. Configure Cloudinary for user uploads, or select and configure the S3 filesystem disk (`FILESYSTEM_DISK=s3`, bucket, region, and credentials or an instance role). Ensure the bucket/CDN serves uploaded images publicly. Local-disk uploads are limited to local development and tests; hosted environments reject uploads when no durable storage is configured rather than returning URLs that will break after a restart or deployment.
 6. Set `NEXT_PUBLIC_API_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ML_SERVICE_URL`, and email settings to the production service URLs.
 7. Run database migrations during deployment with `php artisan migrate --force`. Seeders create sample users and data; review them and do not run them against production without removing or changing their default credentials.
 

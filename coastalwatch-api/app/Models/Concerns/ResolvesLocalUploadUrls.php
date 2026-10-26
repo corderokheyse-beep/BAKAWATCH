@@ -6,6 +6,14 @@ trait ResolvesLocalUploadUrls
 {
     public function getImageUrlAttribute(?string $value): ?string
     {
+        if (empty($value)) {
+            $photos = $this->photos;
+            if (is_array($photos) && !empty($photos)) {
+                $first = $photos[0];
+                $value = is_array($first) ? ($first['url'] ?? null) : (is_string($first) ? $first : null);
+            }
+        }
+
         return $this->resolveLocalUploadUrl($value, $this->attributes['image_public_id'] ?? null);
     }
 
@@ -20,6 +28,12 @@ trait ResolvesLocalUploadUrls
         }
 
         return array_map(function ($photo) {
+            if (is_string($photo)) {
+                return [
+                    'url' => $this->resolveLocalUploadUrl($photo, null),
+                ];
+            }
+
             if (! is_array($photo)) {
                 return $photo;
             }
@@ -39,7 +53,7 @@ trait ResolvesLocalUploadUrls
         if ($publicId && str_starts_with($publicId, 'local:')) {
             $path = substr($publicId, strlen('local:'));
         } elseif ($url) {
-            $urlPath = parse_url($url, PHP_URL_PATH);
+            $urlPath = parse_url(str_replace('\\', '/', $url), PHP_URL_PATH);
             if (is_string($urlPath)) {
                 $relativePath = ltrim($urlPath, '/');
                 foreach (['api/uploads/', 'storage/app/public/', 'storage/'] as $prefix) {
@@ -63,11 +77,12 @@ trait ResolvesLocalUploadUrls
         }
 
         $path = rawurldecode($path);
+        $path = str_replace('\\', '/', $path);
+        $path = ltrim($path, '/');
+
         if (
             $path === ''
             || str_contains($path, '..')
-            || str_contains($path, '\\')
-            || str_starts_with($path, '/')
         ) {
             return $url;
         }

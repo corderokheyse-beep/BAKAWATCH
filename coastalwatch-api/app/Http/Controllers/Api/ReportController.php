@@ -62,7 +62,7 @@ class ReportController extends Controller
             ->select([
                 'id', 'title', 'description', 'latitude', 'longitude', 'location_name',
                 'status', 'category', 'severity', 'affected_radius_m', 'image_url', 'image_public_id',
-                'admin_notes', 'created_at',
+                'photos', 'report_type', 'admin_notes', 'created_at',
             ])
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->category, fn($q) => $q->where('category', $request->category));
@@ -342,7 +342,7 @@ class ReportController extends Controller
 
         return response()->json([
             'report'         => $report,
-            'before_photo'   => $report->image_url,
+            'before_photo'   => $report->image_url ?? ($report->photos[0]['url'] ?? null),
             'after_photo'    => $report->latestUpdatePhoto(),
             'updates'        => $report->updates,
             'status_history' => $report->statusHistory,

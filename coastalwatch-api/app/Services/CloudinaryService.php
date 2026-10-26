@@ -25,10 +25,14 @@ class CloudinaryService
         // When Cloudinary credentials are not configured, fall back to storing
         // the image on the local public disk for local development and tests.
         if (! $this->isConfigured()) {
+            if ($this->isS3Configured()) {
+                return $this->storeOnS3($file, $folder);
+            }
+
             if (! app()->environment('local', 'testing')) {
                 throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException(
                     null,
-                    'Durable image storage is not configured. Set the Cloudinary credentials before accepting uploads.'
+                    'Durable image storage is not configured. Set Cloudinary credentials or configure the S3 filesystem disk before accepting uploads.'
                 );
             }
 
@@ -64,6 +68,11 @@ class CloudinaryService
             return \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
         }
 
+        if (str_starts_with($publicId, 's3:')) {
+            $path = substr($publicId, strlen('s3:'));
+            return \Illuminate\Support\Facades\Storage::disk('s3')->delete($path);
+        }
+
         if (! $this->isConfigured()) {
             return true;
         }
@@ -88,6 +97,28 @@ class CloudinaryService
             empty($this->apiKey)    || $this->apiKey    === 'your_api_key' ||
             empty($this->apiSecret) || $this->apiSecret === 'your_api_secret'
         );
+    }
+
+    /** S3 is an optional durable-storage fallback when explicitly selected. */
+    private function isS3Configured(): bool
+    {
+        return config('filesystems.default') === 's3'
+            && ! empty(config('filesystems.disks.s3.bucket'));
+    }
+
+    private function storeOnS3(UploadedFile $file, string $folder): array
+    {
+        $disk = \Illuminate\Support\Facades\Storage::disk('s3');
+        $path = $file->store($folder, 's3');
+
+        if (! $path) {
+            throw new \RuntimeException('S3 image upload failed: the file could not be stored.');
+        }
+
+        return [
+            'secure_url' => $disk->url($path),
+            'public_id'  => 's3:' . $path,
+        ];
     }
 
     /**

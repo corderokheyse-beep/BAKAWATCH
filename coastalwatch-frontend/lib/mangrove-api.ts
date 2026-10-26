@@ -211,8 +211,17 @@ export const deleteSpecies = (id: number) =>
   api.delete(`/species/${id}`).then(r => r.data)
 
 // ─── Announcements ────────────────────────────────────────────────────────────
-export const fetchAnnouncements = () =>
-  api.get<Announcement[]>('/announcements').then(r => toArray<Announcement>(r.data))
+let _announcementsRequest: Promise<Announcement[]> | null = null
+
+export const fetchAnnouncements = (): Promise<Announcement[]> => {
+  if (_announcementsRequest) return _announcementsRequest
+
+  _announcementsRequest = api.get<Announcement[]>('/announcements')
+    .then(r => toArray<Announcement>(r.data))
+    .finally(() => { _announcementsRequest = null })
+
+  return _announcementsRequest
+}
 
 export const fetchAdminAnnouncements = () =>
   api.get<Announcement[]>('/admin/announcements').then(r => r.data)

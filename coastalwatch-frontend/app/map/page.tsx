@@ -12,8 +12,7 @@ import MonitoringTimeline from '@/components/reports/MonitoringTimeline'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import type { Report, RestorationSite, ReportCategory } from '@/lib/types'
-import { formatDate, CATEGORY_ICONS } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+import { formatDate, CATEGORY_ICONS, cn, resolveImageUrl, getReportPhotoUrls } from '@/lib/utils'
 import { downloadReportPdf, downloadSitePdf, downloadMapDataPdf } from '@/lib/map-report-pdf'
 import toast from 'react-hot-toast'
 import {
@@ -21,7 +20,7 @@ import {
   XCircle, Leaf, TreePine, Activity,
   ChevronRight, Radio, Sprout, Ban,
   User as UserIcon, Loader2, ShieldAlert, Download,
-  ChevronDown, ListTree,
+  ChevronDown, ListTree, Maximize2, ImageIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -153,7 +152,9 @@ function MapPageInner() {
   const [siteDetailLoading, setSiteDetailLoading] = useState(false)
   const [panelMode, setPanelMode]           = useState<PanelMode>(null)
 
-  const [showTimeline, setShowTimeline] = useState(false)
+  const [showTimeline, setShowTimeline]     = useState(false)
+  const [activePhotoIdx, setActivePhotoIdx] = useState(0)
+  const [lightboxUrl, setLightboxUrl]       = useState<string | null>(null)
 
   // Legend starts expanded on desktop, collapsed to a compact pill on phones
   // where the full card would cover most of the map. `null` = not determined
@@ -240,11 +241,27 @@ function MapPageInner() {
   )
 
   // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Handlers ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
-  function handleReportClick(r: Report) {
+  async function handleReportClick(r: Report) {
     setSelectedReport(r)
     setSelectedSite(null)
     setPanelMode('report')
     setShowTimeline(false)
+    setActivePhotoIdx(0)
+
+    try {
+      const { data } = await api.get(`/reports/${r.id}`)
+      setSelectedReport(prev => {
+        if (!prev || prev.id !== r.id) return prev
+        return {
+          ...prev,
+          ...(data ?? {}),
+          photos: data?.photos ?? prev.photos,
+          image_url: data?.image_url ?? prev.image_url,
+        }
+      })
+    } catch {
+      // keep the list payload already shown
+    }
   }
 
   async function handleSiteClick(s: RestorationSite) {

@@ -41,8 +41,9 @@ export default function MapView({
     if (initRef.current) return        // already initialised in this mount cycle
     initRef.current = true
 
+    let destroyed = false
     import('leaflet').then((L) => {
-      if (!containerRef.current) return
+      if (destroyed || !containerRef.current) return
       LRef.current = L
 
       // Destroy any leftover instance on the DOM node (e.g. HMR)
@@ -143,11 +144,14 @@ export default function MapView({
           </div>`)
         if (onProjectClick) marker.on('click', () => onProjectClick(project))
       })
+    }).catch((error) => {
+      if (!destroyed) console.error('[MapView] Failed to initialize Leaflet.', error)
     })
 
     return () => {
       // Cleanup runs before the next effect and on unmount
-      mapRef.current?.remove()
+      destroyed = true
+      try { mapRef.current?.remove() } catch { /* map already removed */ }
       mapRef.current = null
       LRef.current = null
       pickMarkerRef.current = null

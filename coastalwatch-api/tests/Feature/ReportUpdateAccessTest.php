@@ -73,3 +73,36 @@ test('MENRO can add a report update with a photo and see legacy photos in the ti
         ->assertJsonFragment(['image_url' => 'https://images.example/legacy-update.jpg'])
         ->assertJsonFragment(['url' => 'https://images.example/new-update.jpg']);
 });
+
+test('timeline resolves baseline and update photos when image_url is missing', function () {
+    $menro = User::factory()->create(['role' => 'menro']);
+    $report = Report::create([
+        'user_id' => $menro->id,
+        'title' => 'Photos stored in arrays',
+        'description' => 'Both baseline and follow-up photos use the photos field.',
+        'latitude' => 12.9,
+        'longitude' => 121.5,
+        'status' => 'pending',
+        'category' => 'damage',
+        'photos' => [['url' => 'https://images.example/baseline.jpg']],
+    ]);
+
+    ReportUpdate::create([
+        'report_id' => $report->id,
+        'updated_by' => $menro->id,
+        'type' => 'threat',
+        'fields' => [],
+        'photos' => [['url' => 'https://images.example/follow-up.jpg']],
+        'observation' => 'Follow-up photo',
+        'status' => 'pending',
+        'update_date' => now()->toDateString(),
+    ]);
+
+    $this->actingAs($menro)
+        ->getJson("/api/reports/{$report->id}/timeline")
+        ->assertOk()
+        ->assertJsonPath('before_photo', 'https://images.example/baseline.jpg')
+        ->assertJsonPath('after_photo', 'https://images.example/follow-up.jpg')
+        ->assertJsonPath('updates.0.image_url', 'https://images.example/follow-up.jpg')
+        ->assertJsonPath('updates.0.photos.0.url', 'https://images.example/follow-up.jpg');
+});

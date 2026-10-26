@@ -104,7 +104,7 @@ class FirebaseTokenVerifier
     private function googleCerts(): array
     {
         return Cache::remember('firebase_secure_token_certs', now()->addHours(1), function () {
-            $response = Http::timeout(10)->get(self::CERT_URL);
+            $response = Http::connectTimeout(3)->timeout(8)->get(self::CERT_URL);
             if (!$response->successful()) {
                 throw new RuntimeException('Unable to fetch Google signing certificates.');
             }

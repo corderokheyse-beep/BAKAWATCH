@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import axios from 'axios'
 import {
   Cloud,
   CloudDrizzle,
@@ -17,7 +16,9 @@ import {
   Thermometer,
   Wind,
 } from 'lucide-react'
-import api from '@/lib/api'
+
+const WEATHER_LATITUDE = 12.983294
+const WEATHER_LONGITUDE = 121.4666648
 
 interface CurrentWeather {
   time: string
@@ -54,6 +55,61 @@ interface WeatherForecast {
   current: CurrentWeather
   hourly: HourlyWeather[]
   daily: DailyWeather[]
+}
+
+interface OpenMeteoResponse {
+  timezone: string
+  current: CurrentWeather
+  hourly: {
+    time: string[]
+    temperature_2m: number[]
+    precipitation_probability: number[]
+    precipitation: number[]
+    weather_code: number[]
+  }
+  daily: {
+    time: string[]
+    weather_code: number[]
+    temperature_2m_max: number[]
+    temperature_2m_min: number[]
+    precipitation_probability_max: number[]
+  }
+}
+
+function normalizeForecast(data: OpenMeteoResponse): WeatherForecast {
+  const currentHour = `${data.current.time.slice(0, 13)}:00`
+  const hourly = data.hourly.time
+    .map((time, index) => ({ time, index }))
+    .filter(({ time }) => time >= currentHour)
+    .slice(0, 6)
+    .map(({ time, index }) => ({
+      time,
+      temperature: data.hourly.temperature_2m[index] ?? null,
+      precipitation_probability: data.hourly.precipitation_probability[index] ?? null,
+      precipitation: data.hourly.precipitation[index] ?? null,
+      weather_code: data.hourly.weather_code[index] ?? null,
+    }))
+
+  const daily = data.daily.time.map((date, index) => ({
+    date,
+    weather_code: data.daily.weather_code[index] ?? null,
+    temperature_max: data.daily.temperature_2m_max[index] ?? null,
+    temperature_min: data.daily.temperature_2m_min[index] ?? null,
+    precipitation_probability_max: data.daily.precipitation_probability_max[index] ?? null,
+  }))
+
+  if (hourly.length === 0 || daily.length === 0) {
+    throw new Error('The forecast provider returned incomplete weather data.')
+  }
+
+  return {
+    location: 'Gloria, Oriental Mindoro',
+    timezone: data.timezone || 'Asia/Manila',
+    fetched_at: new Date().toISOString(),
+    current: data.current,
+    hourly,
+    daily,
+  }
 }
 
 function weatherDescription(code: number): string {
@@ -107,13 +163,45 @@ export default function WeatherForecastCard() {
     setError('')
 
     try {
-      const { data } = await api.get<WeatherForecast>('/weather')
-      setForecast(data)
-    } catch (requestError: unknown) {
-      const message = axios.isAxiosError<{ message?: string }>(requestError)
-        ? requestError.response?.data?.message
-        : null
-      setError(message ?? 'Weather forecast is temporarily unavailable.')
+      const url = new URL('https://api.open-meteo.com/v1/forecast')
+      url.search = new URLSearchParams({
+        latitude: String(WEATHER_LATITUDE),
+        longitude: String(WEATHER_LONGITUDE),
+        current: [
+          'temperature_2m',
+          'relative_humidity_2m',
+          'apparent_temperature',
+          'is_day',
+          'precipitation',
+          'weather_code',
+          'wind_speed_10m',
+          'wind_direction_10m',
+        ].join(','),
+        hourly: [
+          'temperature_2m',
+          'precipitation_probability',
+          'precipitation',
+          'weather_code',
+        ].join(','),
+        daily: [
+          'weather_code',
+          'temperature_2m_max',
+          'temperature_2m_min',
+          'precipitation_probability_max',
+        ].join(','),
+        forecast_days: '5',
+        timezone: 'Asia/Manila',
+      }).toString()
+
+      const response = await fetch(url, { cache: 'no-store' })
+      if (!response.ok) {
+        throw new Error(`Open-Meteo returned HTTP ${response.status}.`)
+      }
+
+      const data = await response.json() as OpenMeteoResponse
+      setForecast(normalizeForecast(data))
+    } catch {
+      setError('Weather forecast is temporarily unavailable.')
     } finally {
       setLoading(false)
       setRefreshing(false)

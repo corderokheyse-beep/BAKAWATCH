@@ -87,3 +87,27 @@ test('remote image URLs are unchanged', function () {
 
     expect($report->image_url)->toBe('https://res.cloudinary.com/example/image/upload/photo.jpg');
 });
+
+test('image_url falls back to first photo in photos array when image_url is null', function () {
+    $report = new Report();
+    $report->setRawAttributes([
+        'image_url' => null,
+        'photos' => json_encode([
+            ['url' => 'http://localhost:8000/api/uploads/reports/first.jpg'],
+            ['url' => 'http://localhost:8000/api/uploads/reports/second.jpg'],
+        ]),
+    ]);
+
+    expect($report->image_url)->toBe('https://api.example.test/api/uploads/reports/first.jpg')
+        ->and($report->photos)->toHaveCount(2)
+        ->and($report->photos[0]['url'])->toBe('https://api.example.test/api/uploads/reports/first.jpg');
+});
+
+test('windows backslash paths in upload URLs are normalized to forward slashes', function () {
+    $report = new Report();
+    $report->setRawAttributes([
+        'image_url' => 'reports\\windows-slash.jpg',
+    ]);
+
+    expect($report->image_url)->toBe('https://api.example.test/api/uploads/reports/windows-slash.jpg');
+});
