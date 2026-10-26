@@ -11,6 +11,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import type { Report, RestorationProject } from '@/lib/types'
@@ -68,6 +69,10 @@ export default function DashboardPage() {
               <Plus className="w-4 h-4" /> Report Threat
             </Link>
           )}
+        </div>
+
+        <div className="mb-8">
+          <WeatherForecastCard />
         </div>
 
         {/* Stats */}

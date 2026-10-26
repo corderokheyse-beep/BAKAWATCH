@@ -8,6 +8,7 @@ import Link from 'next/link'
 import nextDynamic from 'next/dynamic'
 import SidebarLayout from '@/components/layout/SidebarLayout'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { cn, timeAgo } from '@/lib/utils'
@@ -161,6 +162,8 @@ export default function AdminDashboardPage() {
             Refresh data
           </button>
         </div>
+
+        <WeatherForecastCard />
 
         {/* System health banner */}
         {health && <SystemHealthBanner health={health} />}

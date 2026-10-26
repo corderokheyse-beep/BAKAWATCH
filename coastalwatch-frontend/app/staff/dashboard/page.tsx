@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchSites, fetchAllEvents, fetchSpecies, fetchEventRequests } from '@/lib/mangrove-api'
 import api from '@/lib/api'
@@ -179,6 +180,8 @@ export default function StaffDashboardPage() {
             </Link>
           </div>
         </div>
+
+        <WeatherForecastCard />
 
         {/* ── Role banner ─────────────────────────────────────────────────── */}
         <div className="reveal relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-primary-50 to-teal-50 p-5">

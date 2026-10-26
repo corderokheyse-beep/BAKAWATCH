@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchSites } from '@/lib/mangrove-api'
 import type { RestorationSite } from '@/lib/types'
@@ -52,6 +53,8 @@ export default function DenrDashboardPage() {
   return (
     <SidebarLayout title={`Welcome, ${user?.name?.split(' ')[0]}`} subtitle="DENR Evaluator — Authorized Review">
       <div className="page-container space-y-8">
+
+        <WeatherForecastCard />
 
         {/* Read-only access banner */}
         <div className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-sky-50 to-indigo-50 p-5">

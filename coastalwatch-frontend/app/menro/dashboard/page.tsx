@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchSites, fetchAllEvents, fetchSpecies, fetchEventRequests } from '@/lib/mangrove-api'
 import api from '@/lib/api'
@@ -222,6 +223,8 @@ export default function MenroDashboardPage() {
             </Link>
           </div>
         </div>
+
+        <WeatherForecastCard />
 
         {/* ── Role banner ─────────────────────────────────────────────────── */}
         <div className="reveal animate-slide-up relative overflow-hidden rounded-2xl border border-teal-100 bg-gradient-to-r from-teal-50 via-primary-50 to-emerald-50 p-5">

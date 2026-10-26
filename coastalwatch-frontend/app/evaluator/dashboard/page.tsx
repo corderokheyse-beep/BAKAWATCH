@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchSites, fetchSpecies } from '@/lib/mangrove-api'
 import type { RestorationSite, MangroveSpecies } from '@/lib/types'
@@ -55,6 +56,8 @@ export default function EvaluatorDashboardPage() {
   return (
     <SidebarLayout title={`Welcome, ${user?.name?.split(' ')[0]}`} subtitle="Research Evaluator — Scientific Review">
       <div className="page-container space-y-8">
+
+        <WeatherForecastCard />
 
         {/* Evaluator access banner */}
         <div className="relative overflow-hidden rounded-2xl border border-purple-100 bg-gradient-to-r from-purple-50 via-fuchsia-50 to-indigo-50 p-5">
