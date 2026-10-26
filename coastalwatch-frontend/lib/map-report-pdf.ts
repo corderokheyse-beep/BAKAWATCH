@@ -11,10 +11,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import api from '@/lib/api'
+import { getReportPhotoUrls } from '@/lib/utils'
 import type { Report, RestorationSite, SitePhoto } from '@/lib/types'
 
 const BRAND: [number, number, number] = [26, 71, 49] // #1a4731 forest green
 const MARGIN = 14
+
+interface PdfTableCell {
+  content: string
+  styles: { fillColor: [number, number, number]; cellWidth: number }
+}
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 const fileSlug = (s: string) =>
@@ -97,7 +103,7 @@ async function makeDoc(titleLine: string, subtitle: string) {
   }
 
   // Generic header/body grid table.
-  const grid = (head: string[][], body: (string | number)[][], opts?: any) => {
+  const grid = (head: string[][], body: (string | number | PdfTableCell)[][], opts?: any) => {
     autoTable(doc, {
       startY: y, head, body, theme: 'striped', showHead: 'everyPage',
       headStyles: { fillColor: BRAND, textColor: 255, fontSize: 8, fontStyle: 'bold' },
@@ -144,6 +150,76 @@ function drawImageBox(
   doc.setTextColor(0, 0, 0)
 }
 
+interface PdfPhoto {
+  url: string
+  label: string
+}
+
+function getReportEvidencePhotos(report: Report, timeline: any): PdfPhoto[] {
+  const photos: PdfPhoto[] = []
+  const seen = new Set<string>()
+  const add = (url: unknown, label: string) => {
+    if (typeof url !== 'string' || !url || seen.has(url)) return
+    seen.add(url)
+    photos.push({ url, label })
+  }
+
+  getReportPhotoUrls(report).forEach((url, index) => add(url, `INITIAL REPORT · PHOTO ${index + 1}`))
+
+  const updates = Array.isArray(timeline?.updates) ? timeline.updates : []
+  updates.forEach((update: any, updateIndex: number) => {
+    const updatePhotos = Array.isArray(update?.photos)
+      ? update.photos.map((photo: any) => typeof photo === 'string' ? photo : photo?.url)
+      : []
+    if (updatePhotos.length > 0) {
+      updatePhotos.forEach((url: unknown, photoIndex: number) =>
+        add(url, `UPDATE ${updateIndex + 1} · PHOTO ${photoIndex + 1} · ${fmtDate(update.update_date)}`),
+      )
+    } else {
+      add(update?.image_url, `UPDATE ${updateIndex + 1} · ${fmtDate(update.update_date)}`)
+    }
+  })
+
+  return photos
+}
+
+async function addPhotoGallery(
+  doc: any,
+  pageW: number,
+  getY: () => number,
+  setY: (value: number) => void,
+  ensure: (height: number) => void,
+  photos: PdfPhoto[],
+) {
+  if (!photos.length) return
+
+  const gap = 8
+  const imgW = (pageW - MARGIN * 2 - gap) / 2
+  const imgH = imgW * 0.66
+
+  for (let index = 0; index < photos.length; index += 2) {
+    ensure(imgH + 10)
+    const rowY = getY() + 2
+    const row = photos.slice(index, index + 2)
+    const images = await Promise.all(row.map(photo => imageToDataUrl(photo.url)))
+
+    row.forEach((photo, column) => {
+      const x = MARGIN + column * (imgW + gap)
+      drawImageBox(
+        doc,
+        images[column],
+        x,
+        rowY,
+        imgW,
+        imgH,
+        photo.label,
+        'Image unavailable',
+      )
+    })
+    setY(rowY + imgH + 8)
+  }
+}
+
 // Capture the live Leaflet map (basemap + site overlays + markers) as a PNG data
 // URL via html2canvas, so the Map Data PDF opens with a visual of the map — like
 // the reference LGU maps the MENRO office attaches to Provincial reports. Returns
@@ -157,7 +233,8 @@ async function captureMapImage(
   if (!el) return null
   try {
     const html2canvas = (await import('html2canvas')).default
-    // Give tiles a moment to settle before snapshotting.
+    // Let React apply export-only map layers, then give tiles time to settle.
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
     await new Promise(r => setTimeout(r, 400))
     const canvas = await html2canvas(el, {
       useCORS: true,
@@ -225,32 +302,31 @@ export async function downloadReportPdf(report: Report) {
 
   // Pull monitoring history + before/after from the timeline endpoint.
   let timeline: any = null
+  let timelineUnavailable = false
   try {
     const { data } = await api.get(`/reports/${report.id}/timeline`)
     timeline = data
-  } catch { /* read-only, may be unavailable — the PDF still generates */ }
-
-  // Report photo (if any) + before/after comparison.
-  const imgW = (pageW - MARGIN * 2 - 8) / 2
-  const imgH = imgW * 0.66
-  const beforeUrl = timeline?.before_photo ?? report.image_url ?? null
-  const afterUrl  = timeline?.after_photo ?? null
-  if (beforeUrl || afterUrl) {
-    heading('Before & After')
-    ensure(imgH + 6)
-    const [before, after] = await Promise.all([
-      beforeUrl ? imageToDataUrl(beforeUrl) : Promise.resolve(null),
-      afterUrl  ? imageToDataUrl(afterUrl)  : Promise.resolve(null),
-    ])
-    const boxY = getY() + 2
-    drawImageBox(doc, before, MARGIN, boxY, imgW, imgH, 'BEFORE / INITIAL', 'No photo')
-    drawImageBox(doc, after, MARGIN + imgW + 8, boxY, imgW, imgH, 'AFTER / LATEST', 'No follow-up photo')
-    setY(boxY + imgH + 8)
+  } catch {
+    timelineUnavailable = true
   }
 
   // Monitoring timeline (status history + field updates), newest first.
   const history = timeline?.status_history ?? []
   const updates = timeline?.updates ?? []
+  const evidencePhotos = getReportEvidencePhotos(report, timeline)
+  if (evidencePhotos.length) heading('Photo Evidence')
+  await addPhotoGallery(doc, pageW, getY, setY, ensure, evidencePhotos)
+
+  if (timelineUnavailable) {
+    heading('Monitoring photos unavailable')
+    const note = 'Monitoring updates could not be retrieved while this PDF was generated. The report photos above are included; download the report again when the API is available to include monitoring photos.'
+    const lines = doc.splitTextToSize(note, pageW - MARGIN * 2)
+    ensure(lines.length * 4.6 + 4)
+    doc.setFontSize(8)
+    doc.text(lines, MARGIN, getY())
+    setY(getY() + lines.length * 4.6 + 4)
+  }
+
   if (history.length || updates.length) {
     heading('Monitoring History')
     const rows: (string | number)[][] = []
@@ -361,8 +437,8 @@ export async function downloadMapDataPdf(sites: RestorationSite[], reports: Repo
 
   // Map snapshot — the visual the Provincial report needs.
   const map = await captureMapImage()
+  heading('Site Map — Gloria, Oriental Mindoro')
   if (map) {
-    heading('Site Map — Gloria, Oriental Mindoro')
     const imgW = pageW - MARGIN * 2
     const imgH = Math.min(120, imgW * (map.h / map.w)) // cap height so it fits a page
     ensure(imgH + 4)
@@ -373,7 +449,39 @@ export async function downloadMapDataPdf(sites: RestorationSite[], reports: Repo
     doc.setFontSize(7); doc.setTextColor(150, 150, 150)
     doc.text('Live map snapshot · Imagery © Esri, Maxar, Earthstar Geographics · Labels © Esri', MARGIN, getY())
     doc.setTextColor(0, 0, 0); setY(getY() + 6)
+  } else {
+    const note = 'The live map snapshot could not be captured. The site and report data are included below.'
+    ensure(10)
+    doc.setFontSize(8); doc.setTextColor(150, 90, 40)
+    doc.text(note, MARGIN, getY())
+    setY(getY() + 8); doc.setTextColor(0, 0, 0)
   }
+
+  heading('Mangrove Zonation Legend')
+  const zoneLegend: [string, [number, number, number]][] = [
+    ['Seaward', [6, 182, 212]],
+    ['Seaward to Middle Zone', [20, 184, 166]],
+    ['Middle Intertidal Zone', [34, 197, 94]],
+    ['Middle to Landward Zone', [132, 204, 22]],
+    ['Riverine', [59, 130, 246]],
+    ['Brackish Estuary', [167, 139, 250]],
+    ['Landward', [180, 83, 9]],
+  ]
+  const legendRows = zoneLegend.map(([label, color]) => [
+    { content: '', styles: { fillColor: color, cellWidth: 10 } },
+    label,
+  ])
+  grid([['Zone color', 'Mangrove zonation']], legendRows, {
+    columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 100 } },
+    styles: { cellPadding: 2 },
+  })
+  doc.setFontSize(7.5); doc.setTextColor(110, 110, 110)
+  const zoneNote = 'Colored shapes show mapped restoration-site areas by their recorded dominant species zonation; they are not a surveyed coastal-wide zoning boundary. No zone-area measurements are inferred.'
+  const zoneNoteLines = doc.splitTextToSize(zoneNote, pageW - MARGIN * 2)
+  ensure(zoneNoteLines.length * 3.6 + 4)
+  doc.text(zoneNoteLines, MARGIN, getY())
+  setY(getY() + zoneNoteLines.length * 3.6 + 5)
+  doc.setTextColor(0, 0, 0)
 
   // Summary band.
   heading('Overview')
@@ -427,6 +535,36 @@ export async function downloadMapDataPdf(sites: RestorationSite[], reports: Repo
   } else {
     ensure(8); doc.setFontSize(9); doc.setTextColor(150, 150, 150)
     doc.text('No reports to display.', MARGIN, getY()); setY(getY() + 8); doc.setTextColor(0, 0, 0)
+  }
+
+  if (reports.length) {
+    for (let offset = 0; offset < reports.length; offset += 4) {
+      const batch = reports.slice(offset, offset + 4)
+      const timelines = await Promise.all(batch.map(async report => {
+        try {
+          const { data } = await api.get(`/reports/${report.id}/timeline`)
+          return data
+        } catch {
+          return null
+        }
+      }))
+
+      for (let index = 0; index < batch.length; index++) {
+        const report = batch[index]
+        const evidence = getReportEvidencePhotos(report, timelines[index])
+        if (!evidence.length && timelines[index] !== null) continue
+        const title = report.title ?? 'Untitled report'
+        heading(`Report #${report.id} · ${title.length > 48 ? `${title.slice(0, 45)}…` : title}`)
+        await addPhotoGallery(doc, pageW, getY, setY, ensure, evidence)
+        if (timelines[index] === null) {
+          const note = 'Monitoring update photos could not be retrieved because the report timeline was unavailable during export.'
+          ensure(10)
+          doc.setFontSize(8); doc.setTextColor(150, 90, 40)
+          doc.text(note, MARGIN, getY())
+          setY(getY() + 8); doc.setTextColor(0, 0, 0)
+        }
+      }
+    }
   }
 
   footer()

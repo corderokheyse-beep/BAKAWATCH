@@ -418,7 +418,7 @@ function MapPageInner() {
                 height="100%"
                 showBarangays={filters.showBarangays}
                 showSites={filters.showSites}
-                showMangroveZones={filters.showMangroveZones}
+                showMangroveZones={filters.showMangroveZones || downloading === 'map'}
                 onReportClick={handleReportClick}
                 onSiteClick={handleSiteClick}
                 selectedReportId={selectedReport?.id}
