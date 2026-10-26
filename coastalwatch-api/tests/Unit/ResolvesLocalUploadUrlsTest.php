@@ -38,6 +38,25 @@ test('report update image URLs for local uploads use the current API host', func
     expect($update->image_url)->toBe('https://api.example.test/api/uploads/report-updates/photo.jpg');
 });
 
+test('legacy local upload URLs without a public ID use the current API host', function () {
+    $report = new Report();
+    $report->setRawAttributes([
+        'image_url' => 'http://localhost:8000/api/uploads/reports/legacy.jpg',
+        'photos' => json_encode([
+            ['url' => 'http://localhost:8000/api/uploads/reports/legacy.jpg'],
+        ]),
+    ]);
+
+    $update = new ReportUpdate();
+    $update->setRawAttributes([
+        'image_url' => 'http://localhost:8000/api/uploads/report-updates/legacy.jpg',
+    ]);
+
+    expect($report->image_url)->toBe('https://api.example.test/api/uploads/reports/legacy.jpg')
+        ->and($report->photos[0]['url'])->toBe('https://api.example.test/api/uploads/reports/legacy.jpg')
+        ->and($update->image_url)->toBe('https://api.example.test/api/uploads/report-updates/legacy.jpg');
+});
+
 test('remote image URLs are unchanged', function () {
     $report = new Report();
     $report->setRawAttributes([

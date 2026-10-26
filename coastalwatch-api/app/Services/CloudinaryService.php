@@ -23,9 +23,15 @@ class CloudinaryService
     public function upload(UploadedFile $file, string $folder = 'coastalwatch'): array
     {
         // When Cloudinary credentials are not configured, fall back to storing
-        // the image on the local public disk so uploads still work out of the
-        // box (self-hosted deployments). Returns a usable absolute URL.
+        // the image on the local public disk for local development and tests.
         if (! $this->isConfigured()) {
+            if (! app()->environment('local', 'testing')) {
+                throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException(
+                    null,
+                    'Durable image storage is not configured. Set the Cloudinary credentials before accepting uploads.'
+                );
+            }
+
             return $this->storeLocally($file, $folder);
         }
 

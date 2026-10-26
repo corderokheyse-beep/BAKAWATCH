@@ -35,11 +35,21 @@ trait ResolvesLocalUploadUrls
 
     private function resolveLocalUploadUrl(?string $url, ?string $publicId): ?string
     {
-        if (! $publicId || ! str_starts_with($publicId, 'local:')) {
+        $path = null;
+        if ($publicId && str_starts_with($publicId, 'local:')) {
+            $path = substr($publicId, strlen('local:'));
+        } elseif ($url) {
+            $urlPath = parse_url($url, PHP_URL_PATH);
+            $uploadPrefix = '/api/uploads/';
+            if (is_string($urlPath) && str_starts_with($urlPath, $uploadPrefix)) {
+                $path = substr($urlPath, strlen($uploadPrefix));
+            }
+        }
+
+        if ($path === null) {
             return $url;
         }
 
-        $path = substr($publicId, strlen('local:'));
         if ($path === '' || str_contains($path, '..') || str_starts_with($path, '/')) {
             return $url;
         }

@@ -17,6 +17,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_PROTO);
+
         // Apply security headers and input sanitization globally
         $middleware->append(SecurityHeaders::class);
         $middleware->append(SanitizeInput::class);

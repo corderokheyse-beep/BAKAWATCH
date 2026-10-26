@@ -150,13 +150,15 @@ A practical hosted layout is:
 2. Deploy `coastalwatch-api/` to **Railway**, **Render**, or a managed PHP host.
 3. Provision managed PostgreSQL or MySQL and configure Laravel's `DB_*` variables.
 4. Deploy `ml-service/` as a separate Python web service if species detection is required.
-5. Configure Cloudinary (or another durable object store) for user uploads. Do not rely on a container's local filesystem for uploaded images.
+5. Configure Cloudinary for user uploads. Local-disk uploads are limited to local development and tests; hosted environments reject uploads when Cloudinary is not configured rather than returning URLs that will break after a restart or deployment.
 6. Set `NEXT_PUBLIC_API_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ML_SERVICE_URL`, and email settings to the production service URLs.
 7. Run database migrations during deployment with `php artisan migrate --force`. Seeders create sample users and data; review them and do not run them against production without removing or changing their default credentials.
 
 If Render Shell is unavailable, you can run the starter data seeders during an API deploy. Set `ADMIN_EMAIL` to the intended administrator's Firebase sign-in email and set `ADMIN_PASSWORD` to a strong, unique secret in the Render service environment. Then set `RUN_STARTER_SITES_SEEDER=true` and save. The entrypoint runs migrations, `ProductionSeeder` (which provisions the admin), `StarterSitesSeeder`, and `StarterOperationalDataSeeder`. The operational seeder adds clearly labeled sample inventory entries, planting events, reports, and published tips/guides so each dashboard has example content; these are demonstration records, not verified field activity or official schedules. All seeders are safe to rerun without duplicating these records. The admin can sign in with the Firebase password for that email; the local `ADMIN_PASSWORD` is not the Firebase password. Remove `RUN_STARTER_SITES_SEEDER` or set it to `false` after the seeder completes, then save/restart. Do not share or commit the admin secret. Sample site coordinates and boundaries are representative, not verified survey data.
 
 Use HTTPS for all public services. Set `APP_DEBUG=false`, generate a unique `APP_KEY`, restrict CORS to the real frontend domain, configure durable backups, and use a queue worker if queued notifications are enabled. Test the deployed login, image upload, map, events, reports, and classifier endpoints before sharing the site.
+
+Images uploaded to a developer's local disk are not copied to the hosted API during deployment. Migrate those image files to Cloudinary (and update their report records) or re-upload them after Cloudinary is configured. Updating an image URL alone cannot restore a file that is missing from the API's storage.
 
 ## Tests and builds
 

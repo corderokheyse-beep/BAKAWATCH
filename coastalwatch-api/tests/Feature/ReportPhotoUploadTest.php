@@ -95,3 +95,24 @@ test('map report data resolves legacy local photo URLs against the current host'
         ->assertJsonPath('0.image_url', url('/api/uploads/reports/legacy.jpg'))
         ->assertJsonMissingPath('0.image_public_id');
 });
+
+test('map report photo URLs use HTTPS behind a trusted reverse proxy', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    Report::create([
+        'user_id' => $admin->id,
+        'title' => 'Proxied image',
+        'description' => 'A report served through the production HTTPS proxy.',
+        'image_url' => 'http://localhost:8000/api/uploads/reports/proxied.jpg',
+        'image_public_id' => 'local:reports/proxied.jpg',
+        'latitude' => 12.9,
+        'longitude' => 121.5,
+        'status' => 'pending',
+        'category' => 'damage',
+    ]);
+
+    $this->actingAs($admin)
+        ->withHeader('X-Forwarded-Proto', 'https')
+        ->getJson('/api/reports/map')
+        ->assertOk()
+        ->assertJsonPath('0.image_url', 'https://127.0.0.1:8000/api/uploads/reports/proxied.jpg');
+});
