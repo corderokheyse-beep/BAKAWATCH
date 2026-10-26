@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 class Report extends Model
 {
     use HasFactory, SoftDeletes;
+    use \App\Models\Concerns\ResolvesLocalUploadUrls;
 
     /** Environmental-monitoring status workflow for threat cases. */
     public const STATUS_WORKFLOW = [

@@ -74,3 +74,24 @@ test('threat report validation rejects more than five photos', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('photos');
 });
+
+test('map report data resolves legacy local photo URLs against the current host', function () {
+    $admin = User::factory()->create(['role' => 'admin']);
+    Report::create([
+        'user_id' => $admin->id,
+        'title' => 'Legacy local image',
+        'description' => 'A report with a local image URL saved under an old host.',
+        'image_url' => 'http://localhost:8000/api/uploads/reports/legacy.jpg',
+        'image_public_id' => 'local:reports/legacy.jpg',
+        'latitude' => 12.9,
+        'longitude' => 121.5,
+        'status' => 'pending',
+        'category' => 'damage',
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson('/api/reports/map')
+        ->assertOk()
+        ->assertJsonPath('0.image_url', url('/api/uploads/reports/legacy.jpg'))
+        ->assertJsonMissingPath('0.image_public_id');
+});

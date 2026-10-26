@@ -61,7 +61,7 @@ class ReportController extends Controller
         $query = Report::query()
             ->select([
                 'id', 'title', 'description', 'latitude', 'longitude', 'location_name',
-                'status', 'category', 'severity', 'affected_radius_m', 'image_url',
+                'status', 'category', 'severity', 'affected_radius_m', 'image_url', 'image_public_id',
                 'admin_notes', 'created_at',
             ])
             ->when($request->status, fn($q) => $q->where('status', $request->status))
@@ -74,7 +74,10 @@ class ReportController extends Controller
             $query->approved();
         }
 
-        return response()->json($query->latest()->get());
+        $reports = $query->latest()->get();
+        $reports->each(fn (Report $report) => $report->makeHidden('image_public_id'));
+
+        return response()->json($reports);
     }
 
     public function store(Request $request): JsonResponse

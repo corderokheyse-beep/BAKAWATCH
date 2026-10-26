@@ -95,8 +95,7 @@ class CloudinaryService
 
         // Serve via a Laravel route (not the /storage symlink) so it works on
         // every host without symlink permissions (Windows dev included).
-        $base = rtrim(config('app.url') ?: url('/'), '/');
-        $url  = $base . '/api/uploads/' . ltrim($path, '/');
+        $url = url('/api/uploads/' . ltrim($path, '/'));
 
         return [
             'secure_url' => $url,

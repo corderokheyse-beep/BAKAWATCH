@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReportUpdate extends Model
 {
+    use \App\Models\Concerns\ResolvesLocalUploadUrls;
+
     protected $fillable = [
         'report_id', 'updated_by', 'type', 'fields', 'photos', 'latitude', 'longitude', 'observation', 'action_taken',
         'status', 'image_url', 'image_public_id', 'update_date',
