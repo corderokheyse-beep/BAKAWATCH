@@ -40,9 +40,21 @@ trait ResolvesLocalUploadUrls
             $path = substr($publicId, strlen('local:'));
         } elseif ($url) {
             $urlPath = parse_url($url, PHP_URL_PATH);
-            $uploadPrefix = '/api/uploads/';
-            if (is_string($urlPath) && str_starts_with($urlPath, $uploadPrefix)) {
-                $path = substr($urlPath, strlen($uploadPrefix));
+            if (is_string($urlPath)) {
+                $relativePath = ltrim($urlPath, '/');
+                foreach (['api/uploads/', 'storage/app/public/', 'storage/'] as $prefix) {
+                    if (str_starts_with($relativePath, $prefix)) {
+                        $path = substr($relativePath, strlen($prefix));
+                        break;
+                    }
+                }
+
+                if (
+                    $path === null
+                    && (str_starts_with($relativePath, 'reports/') || str_starts_with($relativePath, 'report-updates/'))
+                ) {
+                    $path = $relativePath;
+                }
             }
         }
 
@@ -50,7 +62,13 @@ trait ResolvesLocalUploadUrls
             return $url;
         }
 
-        if ($path === '' || str_contains($path, '..') || str_starts_with($path, '/')) {
+        $path = rawurldecode($path);
+        if (
+            $path === ''
+            || str_contains($path, '..')
+            || str_contains($path, '\\')
+            || str_starts_with($path, '/')
+        ) {
             return $url;
         }
 

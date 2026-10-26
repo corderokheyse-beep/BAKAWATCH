@@ -57,6 +57,27 @@ test('legacy local upload URLs without a public ID use the current API host', fu
         ->and($update->image_url)->toBe('https://api.example.test/api/uploads/report-updates/legacy.jpg');
 });
 
+test('public storage paths for report photos use the public upload route', function () {
+    $report = new Report();
+    $report->setRawAttributes([
+        'image_url' => '/storage/app/public/reports/report-photo.jpg',
+    ]);
+
+    $update = new ReportUpdate();
+    $update->setRawAttributes([
+        'image_url' => 'https://old-api.example.test/storage/report-updates/update-photo.jpg',
+    ]);
+
+    $relativePathReport = new Report();
+    $relativePathReport->setRawAttributes([
+        'image_url' => 'reports/relative-photo.jpg',
+    ]);
+
+    expect($report->image_url)->toBe('https://api.example.test/api/uploads/reports/report-photo.jpg')
+        ->and($update->image_url)->toBe('https://api.example.test/api/uploads/report-updates/update-photo.jpg')
+        ->and($relativePathReport->image_url)->toBe('https://api.example.test/api/uploads/reports/relative-photo.jpg');
+});
+
 test('remote image URLs are unchanged', function () {
     $report = new Report();
     $report->setRawAttributes([
