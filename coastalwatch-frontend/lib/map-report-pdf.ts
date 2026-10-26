@@ -17,11 +17,6 @@ import type { Report, RestorationSite, SitePhoto } from '@/lib/types'
 const BRAND: [number, number, number] = [26, 71, 49] // #1a4731 forest green
 const MARGIN = 14
 
-interface PdfTableCell {
-  content: string
-  styles: { fillColor: [number, number, number]; cellWidth: number }
-}
-
 const todayStr = () => new Date().toISOString().split('T')[0]
 const fileSlug = (s: string) =>
   s.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'export'
@@ -31,6 +26,34 @@ function fmtDate(v: unknown): string {
   const d = new Date(String(v))
   if (Number.isNaN(d.getTime())) return String(v)
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function formatUpdateDetails(update: any): string {
+  const details: string[] = []
+  if (update.observation) details.push(`Observation: ${update.observation}`)
+
+  const fieldLabels: Record<string, string> = {
+    threat_status: 'Threat status',
+    area_trend: 'Affected area trend',
+    next_step: 'Next step',
+    period: 'Monitoring period',
+    survival_rate: 'Survival rate',
+    average_height: 'Average height',
+    health: 'Mangrove health',
+  }
+  if (update.fields && typeof update.fields === 'object' && !Array.isArray(update.fields)) {
+    for (const [key, value] of Object.entries(update.fields)) {
+      if (value === null || value === undefined || value === '') continue
+      const label = fieldLabels[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
+      const suffix = key === 'survival_rate' ? '%' : key === 'average_height' ? ' cm' : ''
+      details.push(`${label}: ${String(value)}${suffix}`)
+    }
+  }
+  if (update.action_taken) details.push(`Action taken: ${update.action_taken}`)
+  if (update.latitude != null && update.longitude != null) {
+    details.push(`Coordinates: ${update.latitude}, ${update.longitude}`)
+  }
+  return details.join('\n') || 'Monitoring update recorded; no additional notes provided.'
 }
 
 // Fetch an image URL and return a base64 data URL for jsPDF addImage.
@@ -103,9 +126,12 @@ async function makeDoc(titleLine: string, subtitle: string) {
   }
 
   // Generic header/body grid table.
-  const grid = (head: string[][], body: (string | number | PdfTableCell)[][], opts?: any) => {
+  const grid = (head: string[][], body: (string | number | null | undefined)[][], opts?: any) => {
     autoTable(doc, {
-      startY: y, head, body, theme: 'striped', showHead: 'everyPage',
+      startY: y,
+      head,
+      body: body.map(row => row.map(cell => cell ?? '—')),
+      theme: 'striped', showHead: 'everyPage',
       headStyles: { fillColor: BRAND, textColor: 255, fontSize: 8, fontStyle: 'bold' },
       bodyStyles: { fontSize: 8 },
       alternateRowStyles: { fillColor: [247, 250, 248] },
@@ -166,7 +192,9 @@ function getReportEvidencePhotos(report: Report, timeline: any): PdfPhoto[] {
 
   getReportPhotoUrls(report).forEach((url, index) => add(url, `INITIAL REPORT · PHOTO ${index + 1}`))
 
-  const updates = Array.isArray(timeline?.updates) ? timeline.updates : []
+  const updates = Array.isArray(timeline?.updates) && timeline.updates.length
+    ? timeline.updates
+    : Array.isArray(report.updates) ? report.updates : []
   updates.forEach((update: any, updateIndex: number) => {
     const updatePhotos = Array.isArray(update?.photos)
       ? update.photos.map((photo: any) => typeof photo === 'string' ? photo : photo?.url)
@@ -312,7 +340,9 @@ export async function downloadReportPdf(report: Report) {
 
   // Monitoring timeline (status history + field updates), newest first.
   const history = timeline?.status_history ?? []
-  const updates = timeline?.updates ?? []
+  const updates = Array.isArray(timeline?.updates) && timeline.updates.length
+    ? timeline.updates
+    : report.updates ?? []
   const evidencePhotos = getReportEvidencePhotos(report, timeline)
   if (evidencePhotos.length) heading('Photo Evidence')
   await addPhotoGallery(doc, pageW, getY, setY, ensure, evidencePhotos)
@@ -329,7 +359,7 @@ export async function downloadReportPdf(report: Report) {
 
   if (history.length || updates.length) {
     heading('Monitoring History')
-    const rows: (string | number)[][] = []
+    const rows: (string | number | null | undefined)[][] = []
     for (const h of history) {
       rows.push([
         fmtDate(h.created_at),
@@ -340,13 +370,15 @@ export async function downloadReportPdf(report: Report) {
     }
     for (const u of updates) {
       rows.push([
-        fmtDate(u.update_date),
-        u.status ?? 'update',
+        fmtDate(u.update_date ?? u.created_at),
+        `Monitoring update${u.type ? ` · ${u.type.replace(/_/g, ' ')}` : ''}`,
         u.updater?.name ?? '—',
-        [u.observation, u.action_taken ? `Action: ${u.action_taken}` : ''].filter(Boolean).join(' — '),
+        formatUpdateDetails(u),
       ])
     }
-    rows.sort((a, b) => new Date(String(b[0])).getTime() - new Date(String(a[0])).getTime())
+    rows.sort((a, b) =>
+      new Date(String(b[0])).getTime() - new Date(String(a[0])).getTime(),
+    )
     grid(
       [['Date', 'Status', 'By', 'Notes']],
       rows,
@@ -467,14 +499,16 @@ export async function downloadMapDataPdf(sites: RestorationSite[], reports: Repo
     ['Brackish Estuary', [167, 139, 250]],
     ['Landward', [180, 83, 9]],
   ]
-  const legendRows = zoneLegend.map(([label, color]) => [
-    { content: '', styles: { fillColor: color, cellWidth: 10 } },
-    label,
-  ])
-  grid([['Zone color', 'Mangrove zonation']], legendRows, {
-    columnStyles: { 0: { cellWidth: 18 }, 1: { cellWidth: 100 } },
-    styles: { cellPadding: 2 },
-  })
+  ensure(zoneLegend.length * 7 + 4)
+  doc.setFontSize(8)
+  for (const [label, color] of zoneLegend) {
+    doc.setFillColor(...color)
+    doc.rect(MARGIN, getY(), 5, 5, 'F')
+    doc.setTextColor(0, 0, 0)
+    doc.text(label, MARGIN + 8, getY() + 3.7)
+    setY(getY() + 7)
+  }
+  setY(getY() + 2)
   doc.setFontSize(7.5); doc.setTextColor(110, 110, 110)
   const zoneNote = 'Colored shapes show mapped restoration-site areas by their recorded dominant species zonation; they are not a surveyed coastal-wide zoning boundary. No zone-area measurements are inferred.'
   const zoneNoteLines = doc.splitTextToSize(zoneNote, pageW - MARGIN * 2)

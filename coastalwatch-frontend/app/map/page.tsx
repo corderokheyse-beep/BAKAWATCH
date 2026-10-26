@@ -129,8 +129,10 @@ function MapPageInner() {
     try {
       await downloadMapDataPdf(allSites, visibleReports)
       toast.success('Map data PDF downloaded', { id: t })
-    } catch {
-      toast.error('Could not build the PDF', { id: t })
+    } catch (error) {
+      console.error('Map data PDF generation failed:', error)
+      const message = error instanceof Error ? `Could not build the PDF: ${error.message}` : 'Could not build the PDF.'
+      toast.error(message, { id: t })
     } finally { setDownloading(null) }
   }
 
