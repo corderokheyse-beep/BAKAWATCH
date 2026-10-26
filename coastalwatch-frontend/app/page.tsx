@@ -11,8 +11,8 @@ import {
   Menu, X, ArrowUp, BookOpen,
 } from 'lucide-react'
 import BakawatchLogo from '@/components/ui/BakawatchLogo'
-import { fetchOpenEvents, fetchSites, fetchArticles, fetchAnnouncements, fetchPublicStats } from '@/lib/mangrove-api'
-import type { PlantingEvent, RestorationSite, Article, Announcement, PublicStats } from '@/lib/types'
+import { fetchOpenEvents, fetchSites, fetchAnnouncements, fetchPublicStats } from '@/lib/mangrove-api'
+import type { PlantingEvent, RestorationSite, Announcement, PublicStats } from '@/lib/types'
 import { formatDate } from '@/lib/utils'
 
 const SitePolygonMap = dynamic(() => import('@/components/map/SitePolygonMap'), {
@@ -34,17 +34,43 @@ function scrollTo(id: string) {
 const NAV_LINKS = [
   { label: 'About',    id: 'about' },
   { label: 'Features', id: 'features' },
-  { label: 'Articles', id: 'articles' },
+  { label: 'Tips & Guides', id: 'tips-guides' },
   { label: 'Events',   id: 'events' },
   { label: 'Map',      id: 'map' },
   { label: 'Contact',  id: 'contact' },
+]
+
+const TIPS_AND_GUIDES = [
+  {
+    icon: MapPin,
+    label: 'Before you plant',
+    title: 'Choose the right place',
+    description: 'Mangroves thrive along sheltered shorelines where they already grow naturally.',
+    detail: 'Check local conditions and ask MENRO Gloria for guidance before starting a planting activity.',
+    color: 'bg-teal-100 text-teal-700',
+  },
+  {
+    icon: TreePine,
+    label: 'Planting guide',
+    title: 'Use suitable native species',
+    description: 'Select healthy, locally appropriate mangrove seedlings or propagules for the site.',
+    detail: 'Match the species to the area and follow recommended spacing and planting methods.',
+    color: 'bg-green-100 text-green-700',
+  },
+  {
+    icon: Leaf,
+    label: 'Ongoing care',
+    title: 'Help young mangroves grow',
+    description: 'Give new plantings room to establish and protect them from avoidable disturbance.',
+    detail: 'Keep the area free of litter, check on seedling survival, and report damage to local staff.',
+    color: 'bg-lime-100 text-lime-700',
+  },
 ]
 
 export default function HomePage() {
   const { user, homePath } = useAuth()
   const [events, setEvents]               = useState<PlantingEvent[]>([])
   const [sites, setSites]                 = useState<RestorationSite[]>([])
-  const [articles, setArticles]           = useState<Article[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [stats, setStats]                 = useState<PublicStats | null>(null)
   const [mounted, setMounted]     = useState(false)
@@ -55,7 +81,6 @@ export default function HomePage() {
   useEffect(() => {
     fetchOpenEvents().then(setEvents).catch(() => {})
     fetchSites().then(setSites).catch(() => {})
-    fetchArticles({ per_page: 3 }).then(data => setArticles(data.data ?? [])).catch(() => {})
     fetchAnnouncements().then(setAnnouncements).catch(() => {})
     fetchPublicStats().then(setStats).catch(() => {})
     setMounted(true)
@@ -64,7 +89,7 @@ export default function HomePage() {
     window.addEventListener('scroll', onScroll)
 
     // Track which section is in view
-    const sectionIds = ['hero', 'about', 'features', 'articles', 'events', 'map', 'contact']
+    const sectionIds = ['hero', 'about', 'features', 'tips-guides', 'events', 'map', 'contact']
     const observers: IntersectionObserver[] = []
 
     sectionIds.forEach(id => {
@@ -404,58 +429,33 @@ export default function HomePage() {
         </section>
       )}
 
-      {/* ── Articles & Tips ─────────────────────────────────────────────────── */}
-      <section id="articles" className="py-20 px-4 bg-white relative overflow-hidden">
+      {/* ── Tips & Guides ───────────────────────────────────────────────────── */}
+      <section id="tips-guides" className="py-20 px-4 bg-white relative overflow-hidden">
         <div className="relative max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <span className="inline-flex items-center gap-2 bg-amber-100 text-amber-700 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
-              <BookOpen className="w-3.5 h-3.5" /> Knowledge Hub
+            <span className="inline-flex items-center gap-2 bg-primary-100 text-primary-700 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
+              <BookOpen className="w-3.5 h-3.5" /> Mangrove care
             </span>
-            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Tips & Articles on Mangroves</h2>
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">Tips & Guides</h2>
             <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed">
-              Learn about mangrove species, conservation practices, and restoration techniques from the BAKAWATCH knowledge base.
+              Simple ways to support healthy mangroves and successful restoration in Gloria.
             </p>
           </div>
-          {articles.length === 0 ? (
-            <div className="text-center py-10">
-              <BookOpen className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-              <p className="text-gray-400 text-sm">Articles coming soon from MENRO Gloria.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {articles.map(article => {
-                const catColors: Record<string, string> = {
-                  tips: 'bg-green-100 text-green-700', news: 'bg-blue-100 text-blue-700',
-                  guide: 'bg-amber-100 text-amber-700', research: 'bg-purple-100 text-purple-700',
-                }
-                return (
-                  <Link key={article.id} href={`/articles/${article.slug}`} className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden block">
-                    <div className="relative h-40 bg-gradient-to-br from-primary-50 to-forest-50 overflow-hidden">
-                      {article.cover_image_url
-                        ? <img src={article.cover_image_url} alt={article.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                        : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-10 h-10 text-primary-200" /></div>
-                      }
-                      <div className="absolute top-3 left-3">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${catColors[article.category] ?? 'bg-gray-100 text-gray-600'}`}>{article.category}</span>
-                      </div>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2 group-hover:text-primary-700 transition-colors">{article.title}</h3>
-                      {article.excerpt && <p className="text-xs text-gray-500 line-clamp-2 mb-3">{article.excerpt}</p>}
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{article.author?.name ?? 'MENRO Gloria'}</span>
-                        <span>{formatDate(article.published_at ?? article.created_at)}</span>
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-          <div className="text-center mt-8">
-            <Link href="/articles" className="group inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow">
-              View All Articles <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </Link>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {TIPS_AND_GUIDES.map(({ icon: Icon, label, title, description, detail, color }, index) => (
+              <article key={title} className="rounded-3xl border border-gray-100 bg-white p-7 shadow-sm hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between mb-6">
+                  <span className={`w-12 h-12 rounded-2xl flex items-center justify-center ${color}`}>
+                    <Icon className="w-6 h-6" />
+                  </span>
+                  <span className="text-xs font-bold tracking-widest text-gray-300">0{index + 1}</span>
+                </div>
+                <p className="text-xs font-bold uppercase tracking-widest text-primary-700 mb-2">{label}</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-3">{title}</h3>
+                <p className="text-sm leading-relaxed text-gray-600 mb-3">{description}</p>
+                <p className="text-xs leading-relaxed text-gray-400">{detail}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
