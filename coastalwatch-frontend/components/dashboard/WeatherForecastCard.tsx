@@ -9,6 +9,8 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
+  ChevronDown,
+  ChevronUp,
   Droplets,
   Info,
   RefreshCw,
@@ -156,6 +158,7 @@ export default function WeatherForecastCard() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const loadForecast = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
@@ -215,108 +218,133 @@ export default function WeatherForecastCard() {
   }, [loadForecast])
 
   return (
-    <section className="card overflow-hidden border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-cyan-50">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="card !p-4 sm:!p-5 overflow-hidden border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-cyan-50">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-            <CloudSun className="h-5 w-5" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+            <CloudSun className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="font-bold text-gray-900">Weather Forecast</h2>
+            <h2 className="text-sm font-bold text-gray-900">Weather Forecast</h2>
             <p className="text-xs text-gray-500">{forecast?.location ?? 'Gloria, Oriental Mindoro'}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadForecast(true)}
-          disabled={loading || refreshing}
-          aria-label="Refresh weather forecast"
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-sky-100 bg-white px-3 text-xs font-semibold text-sky-800 transition hover:bg-sky-50 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {forecast && (
+            <button
+              type="button"
+              onClick={() => setExpanded(value => !value)}
+              aria-expanded={expanded}
+              aria-controls="weather-forecast-details"
+              className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100"
+            >
+              {expanded ? 'Less' : 'Hourly details'}
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void loadForecast(true)}
+            disabled={loading || refreshing}
+            aria-label="Refresh weather forecast"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-sky-100 bg-white px-2.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="mt-5 h-36 animate-pulse rounded-xl bg-sky-100/70" aria-label="Loading weather forecast" />
+        <div className="mt-3 h-16 animate-pulse rounded-xl bg-sky-100/70" aria-label="Loading weather forecast" />
       ) : error ? (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       ) : forecast && (
         <>
-          <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
-            <div className="rounded-xl bg-white/80 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Current conditions</p>
-              <div className="mt-3 flex items-center gap-4">
-                <WeatherIcon code={forecast.current.weather_code} isDay={forecast.current.is_day === 1} className="h-12 w-12 text-sky-600" />
-                <div>
-                  <p className="text-4xl font-bold leading-none text-sky-950">
-                    {Math.round(forecast.current.temperature_2m)}°
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-gray-700">
-                    {weatherDescription(forecast.current.weather_code)}
-                  </p>
-                </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(180px,0.8fr)_2fr]">
+            <div className="flex min-w-0 items-center gap-3 rounded-xl bg-white/80 px-3 py-2">
+              <WeatherIcon code={forecast.current.weather_code} isDay={forecast.current.is_day === 1} className="h-9 w-9 shrink-0 text-sky-600" />
+              <div className="flex items-baseline gap-2">
+                <p className="text-3xl font-bold leading-none text-sky-950">
+                  {Math.round(forecast.current.temperature_2m)}°
+                </p>
+                <p className="truncate text-xs font-medium text-gray-600">
+                  {weatherDescription(forecast.current.weather_code)}
+                </p>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-sky-100 pt-3 text-xs text-gray-600">
-                <p className="flex items-center gap-1.5"><Thermometer className="h-3.5 w-3.5 text-orange-500" />Feels {Math.round(forecast.current.apparent_temperature)}°C</p>
-                <p className="flex items-center gap-1.5"><Droplets className="h-3.5 w-3.5 text-sky-500" />Humidity {forecast.current.relative_humidity_2m}%</p>
-                <p className="flex items-center gap-1.5"><Wind className="h-3.5 w-3.5 text-teal-600" />Wind {Math.round(forecast.current.wind_speed_10m)} km/h</p>
-                <p className="flex items-center gap-1.5"><CloudRain className="h-3.5 w-3.5 text-blue-500" />Rain {forecast.current.precipitation} mm</p>
-              </div>
+              <p className="ml-auto shrink-0 text-[11px] text-gray-500">
+                Feels {Math.round(forecast.current.apparent_temperature)}°
+              </p>
             </div>
 
-            <div className="rounded-xl bg-white/80 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Next hours</p>
-              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {forecast.hourly.map(hour => (
-                  <div key={hour.time} className="rounded-lg bg-sky-50/80 px-2 py-3 text-center">
-                    <p className="text-[11px] font-medium text-gray-500">
-                      {formatForecastTime(hour.time, forecast.timezone, { hour: 'numeric' })}
-                    </p>
-                    <WeatherIcon code={hour.weather_code} className="mx-auto my-2 h-5 w-5 text-sky-600" />
-                    <p className="text-sm font-bold text-gray-800">
-                      {hour.temperature == null ? '—' : `${Math.round(hour.temperature)}°`}
-                    </p>
-                    <p className="mt-1 text-[10px] text-blue-700">
-                      {hour.precipitation_probability == null ? '—' : `${hour.precipitation_probability}% rain`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl bg-white/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">5-day outlook</p>
-            <div className="mt-2 divide-y divide-sky-50">
+            <div className="grid grid-cols-5 gap-1.5">
               {forecast.daily.map((day, index) => (
-                <div key={day.date} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2 text-sm">
-                  <span className="font-medium text-gray-700">
+                <div key={day.date} className="min-w-0 rounded-xl bg-white/80 px-1.5 py-2 text-center">
+                  <p className="text-[10px] font-semibold text-gray-500">
                     {index === 0 ? 'Today' : formatForecastTime(day.date, forecast.timezone, { weekday: 'short' })}
-                  </span>
-                  <span className="flex items-center gap-2 text-xs text-gray-500">
-                    <WeatherIcon code={day.weather_code} className="h-4 w-4 text-sky-600" />
-                    <span className="hidden sm:inline">{weatherDescription(day.weather_code ?? -1)}</span>
-                  </span>
-                  <span className="text-right font-semibold text-gray-800">
+                  </p>
+                  <WeatherIcon code={day.weather_code} className="mx-auto my-1 h-4 w-4 text-sky-600" />
+                  <p className="text-xs font-semibold text-gray-800">
                     {day.temperature_max == null ? '—' : `${Math.round(day.temperature_max)}°`}
-                    <span className="ml-1 font-normal text-gray-400">
+                    <span className="ml-0.5 font-normal text-gray-400">
                       {day.temperature_min == null ? '' : `${Math.round(day.temperature_min)}°`}
                     </span>
-                  </span>
-                  <span className="w-12 text-right text-xs text-blue-700">
+                  </p>
+                  <p className="text-[10px] text-blue-700">
                     {day.precipitation_probability_max == null ? '—' : `${day.precipitation_probability_max}%`}
-                  </span>
+                  </p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-sky-100 pt-3 text-[11px] text-gray-500">
+          {expanded && (
+            <div id="weather-forecast-details" className="mt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <p className="flex items-center gap-1.5 rounded-lg bg-white/80 px-3 py-2 text-xs text-gray-600">
+                  <Thermometer className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+                  Feels {Math.round(forecast.current.apparent_temperature)}°C
+                </p>
+                <p className="flex items-center gap-1.5 rounded-lg bg-white/80 px-3 py-2 text-xs text-gray-600">
+                  <Droplets className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                  Humidity {forecast.current.relative_humidity_2m}%
+                </p>
+                <p className="flex items-center gap-1.5 rounded-lg bg-white/80 px-3 py-2 text-xs text-gray-600">
+                  <Wind className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                  Wind {Math.round(forecast.current.wind_speed_10m)} km/h
+                </p>
+                <p className="flex items-center gap-1.5 rounded-lg bg-white/80 px-3 py-2 text-xs text-gray-600">
+                  <CloudRain className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  Rain {forecast.current.precipitation} mm
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white/80 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Next hours</p>
+                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  {forecast.hourly.map(hour => (
+                    <div key={hour.time} className="rounded-lg bg-sky-50/80 px-1.5 py-2 text-center">
+                      <p className="text-[10px] font-medium text-gray-500">
+                        {formatForecastTime(hour.time, forecast.timezone, { hour: 'numeric' })}
+                      </p>
+                      <WeatherIcon code={hour.weather_code} className="mx-auto my-1 h-4 w-4 text-sky-600" />
+                      <p className="text-xs font-bold text-gray-800">
+                        {hour.temperature == null ? '—' : `${Math.round(hour.temperature)}°`}
+                      </p>
+                      <p className="text-[10px] text-blue-700">
+                        {hour.precipitation_probability == null ? '—' : `${hour.precipitation_probability}% rain`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-sky-100 pt-2 text-[10px] text-gray-500">
             <p>Weather data by Open-Meteo. Forecasts are estimates.</p>
             <div className="flex items-center gap-3">
               <span>
