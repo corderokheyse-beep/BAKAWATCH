@@ -28,6 +28,13 @@ function fmtDate(v: unknown): string {
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+function finiteNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value !== 'string' || value.trim() === '') return 0
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function formatUpdateDetails(update: any): string {
   const details: string[] = []
   if (update.observation) details.push(`Observation: ${update.observation}`)
@@ -521,8 +528,8 @@ export async function downloadMapDataPdf(sites: RestorationSite[], reports: Repo
   heading('Overview')
   const activeSites = sites.filter(s => s.status === 'active').length
   const inProgress  = sites.filter(s => s.status === 'in_progress').length
-  const totalArea   = sites.reduce((a, s) => a + (s.area_hectares ?? 0), 0)
-  const totalPlanted = sites.reduce((a, s) => a + (s.planted_hectares ?? 0), 0)
+  const totalArea = sites.reduce((total, site) => total + finiteNumber(site.area_hectares), 0)
+  const totalPlanted = sites.reduce((total, site) => total + finiteNumber(site.planted_hectares), 0)
   grid(
     [['Metric', 'Value']],
     [
