@@ -34,10 +34,38 @@ function scrollTo(id: string) {
 const NAV_LINKS = [
   { label: 'About',    id: 'about' },
   { label: 'Features', id: 'features' },
+  { label: 'Manual',   id: 'how-it-works' },
   { label: 'Tips & Guides', id: 'tips-guides' },
   { label: 'Events',   id: 'events' },
   { label: 'Map',      id: 'map' },
   { label: 'Contact',  id: 'contact' },
+]
+
+const SYSTEM_GUIDE = [
+  {
+    icon: Map,
+    title: 'Explore the public information',
+    description: 'Browse restoration sites on the map, read announcements, and check upcoming community planting events without signing in.',
+    color: 'bg-blue-100 text-blue-700',
+  },
+  {
+    icon: Users,
+    title: 'Sign in to your account',
+    description: 'Sign in or create an account to access the dashboard and tools available to your assigned role.',
+    color: 'bg-teal-100 text-teal-700',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Record field activities',
+    description: 'Depending on your access, register for an event, record planting and growth monitoring, or submit a report about a mangrove threat.',
+    color: 'bg-amber-100 text-amber-700',
+  },
+  {
+    icon: BarChart2,
+    title: 'Review progress',
+    description: 'Follow your submissions and site activity in the dashboard. MENRO staff review reports and use the records to track restoration progress.',
+    color: 'bg-green-100 text-green-700',
+  },
 ]
 
 const TIPS_AND_GUIDES = [
@@ -89,7 +117,7 @@ export default function HomePage() {
     window.addEventListener('scroll', onScroll)
 
     // Track which section is in view
-    const sectionIds = ['hero', 'about', 'features', 'tips-guides', 'events', 'map', 'contact']
+    const sectionIds = ['hero', 'about', 'features', 'how-it-works', 'tips-guides', 'events', 'map', 'contact']
     const observers: IntersectionObserver[] = []
 
     sectionIds.forEach(id => {
@@ -403,6 +431,47 @@ export default function HomePage() {
                 <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── System Manual ───────────────────────────────────────────────────── */}
+      <section id="how-it-works" className="py-20 px-4 bg-[#f0f7f0] relative overflow-hidden">
+        <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-primary-100/60 blur-3xl" />
+        <div className="relative max-w-7xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="inline-flex items-center gap-2 bg-white text-primary-700 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
+              <BookOpen className="w-3.5 h-3.5" /> Quick system manual
+            </span>
+            <h2 className="text-4xl font-extrabold text-gray-900 mb-4">How BAKAWATCH Works</h2>
+            <p className="text-gray-500 max-w-2xl mx-auto text-sm leading-relaxed">
+              Follow these steps to explore the system, take part in mangrove work, and keep track of restoration activity.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {SYSTEM_GUIDE.map(({ icon: Icon, title, description, color }, index) => (
+              <article key={title} className="bg-white rounded-3xl p-6 border border-primary-100 shadow-sm">
+                <div className="flex items-center justify-between mb-5">
+                  <span className={`w-12 h-12 rounded-2xl flex items-center justify-center ${color}`}>
+                    <Icon className="w-6 h-6" />
+                  </span>
+                  <span className="text-xs font-bold tracking-widest text-gray-300">STEP 0{index + 1}</span>
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">{title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
+              </article>
+            ))}
+          </div>
+          <p className="text-center text-xs text-gray-500 mt-7">
+            Available tools vary by account role. Need access? Contact MENRO Gloria.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3 mt-5">
+            <Link href="/login" className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
+              Sign in <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link href="/events" className="inline-flex items-center gap-2 bg-white hover:bg-primary-50 text-primary-700 text-sm font-semibold px-5 py-2.5 rounded-xl border border-primary-100 transition-colors">
+              Browse events <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
       </section>
