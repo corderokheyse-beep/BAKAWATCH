@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchSites, fetchOpenEvents } from '@/lib/mangrove-api'
 import api from '@/lib/api'
@@ -88,6 +89,8 @@ export default function FieldDashboardPage() {
             {format(new Date(), 'EEEE, MMMM d, yyyy')}
           </p>
         </div>
+
+        <WeatherForecastCard />
 
         {/* Stats — scoped to the site(s) this Bantay Bakawan is assigned to */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">

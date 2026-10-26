@@ -10,6 +10,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
+import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
 import { useAuth } from '@/lib/auth-context'
 import { fetchOpenEvents, fetchMyRegistrations } from '@/lib/mangrove-api'
 import api from '@/lib/api'
@@ -89,6 +90,8 @@ export default function VolunteerDashboardPage() {
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest animate-slide-up">
           {format(new Date(), 'EEEE, MMMM d, yyyy')}
         </p>
+
+        <WeatherForecastCard />
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 stagger">
@@ -279,7 +282,5 @@ export default function VolunteerDashboardPage() {
     </SidebarLayout>
   )
 }
-
-
 
 

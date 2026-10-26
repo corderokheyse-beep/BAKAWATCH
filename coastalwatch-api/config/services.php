@@ -46,6 +46,11 @@ return [
         'server_key' => env('FCM_SERVER_KEY', ''),
     ],
 
+    'weather' => [
+        'latitude' => (float) env('WEATHER_LATITUDE', 12.983294),
+        'longitude' => (float) env('WEATHER_LONGITUDE', 121.4666648),
+    ],
+
     // Firebase Authentication — the project id is used to validate the
     // audience/issuer of incoming Firebase ID tokens. The service-account
     // credentials file (FIREBASE_CREDENTIALS) is only needed for privileged

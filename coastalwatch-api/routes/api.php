@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\InventoryMovementController;
 use App\Http\Controllers\Api\SiteAreaController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\SitePhotoController;
+use App\Http\Controllers\Api\WeatherForecastController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
@@ -107,6 +108,9 @@ Route::get('/projects/{restorationProject}', [RestorationProjectController::clas
 
 // ─── Authenticated Routes ─────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('role:field_worker,volunteer')
+        ->get('/weather', WeatherForecastController::class);
+
     Route::middleware('role:field_worker')->group(function () {
         Route::get('/events/my-attendance', [PlantingEventController::class, 'myAttendance']);
         Route::post('/events/{plantingEvent}/attendance', [PlantingEventController::class, 'confirmAttendance']);
