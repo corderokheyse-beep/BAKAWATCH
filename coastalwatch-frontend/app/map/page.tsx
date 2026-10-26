@@ -300,6 +300,8 @@ function MapPageInner() {
     setShowTimeline(false)
   }
 
+  const selectedReportPhotoUrls = getReportPhotoUrls(selectedReport)
+
   return (
     <SidebarLayout>
       <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -585,9 +587,17 @@ function MapPageInner() {
                     </button>
                   </div>
                 </div>
-                {selectedReport.image_url && (
-                  <img src={selectedReport.image_url} alt={selectedReport.title}
-                    className="w-full h-36 object-cover" />
+                {selectedReportPhotoUrls.length > 0 && (
+                  <div className={`grid gap-1 ${selectedReportPhotoUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {selectedReportPhotoUrls.map((url, index) => (
+                      <img
+                        key={url}
+                        src={url}
+                        alt={`${selectedReport.title} photo ${index + 1}`}
+                        className="aspect-[4/3] w-full bg-gray-100 object-cover"
+                      />
+                    ))}
+                  </div>
                 )}
                 <div className="px-4 py-3 space-y-2.5">
                   <p className="text-sm text-gray-600 leading-relaxed">{selectedReport.description}</p>

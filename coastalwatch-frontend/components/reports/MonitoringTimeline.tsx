@@ -6,7 +6,7 @@ import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import Badge from '@/components/ui/Badge'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getReportPhotoUrls } from '@/lib/utils'
 import type { Report, ReportUpdate, ReportStatusHistoryEntry } from '@/lib/types'
 import { readJpegGps } from '@/lib/exif-gps'
 import { Plus, Camera, Check, X, Clock, ImageOff, MapPin } from 'lucide-react'
@@ -111,12 +111,49 @@ export default function MonitoringTimeline({ reportId }: { reportId: number; rep
     ...data.status_history.map(entry => ({ kind: 'status' as const, entry, at: entry.created_at })),
     ...orderedUpdates.map(entry => ({ kind: 'update' as const, entry, at: entry.created_at || entry.update_date })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+  const baselinePhotos = getReportPhotoUrls(data.report)
+  if (baselinePhotos.length === 0 && data.before_photo) {
+    baselinePhotos.push(data.before_photo)
+  }
 
   return <div className="space-y-5">
     <section>
       <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Baseline vs latest update</p>
       <div className="grid grid-cols-2 gap-3">
-        {[{ title: isGrowth ? 'Day 0 baseline' : 'Initial report', src: data.before_photo, date: data.report.created_at }, { title: 'Latest update', src: data.after_photo, date: data.updates[0]?.update_date }].map((item, i) => <figure key={i} className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50"><div className="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">{item.src ? <img src={item.src} alt={item.title} className="w-full h-full object-cover" /> : <ImageOff className="w-6 h-6 text-gray-300" />}</div><figcaption className="px-3 py-2"><p className="text-[10px] font-bold uppercase tracking-wide">{item.title}</p><p className="text-xs text-gray-500">{item.date ? formatDate(item.date) : 'No update photo yet'}</p></figcaption></figure>)}
+        <figure className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+          <div className={`grid aspect-video bg-gray-100 ${baselinePhotos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {baselinePhotos.length > 0
+              ? baselinePhotos.map((url, index) => (
+                <img
+                  key={url}
+                  src={url}
+                  alt={`${isGrowth ? 'Day 0 baseline' : 'Initial report'} photo ${index + 1}`}
+                  className="h-full min-h-0 w-full object-cover"
+                />
+              ))
+              : <div className="flex items-center justify-center"><ImageOff className="w-6 h-6 text-gray-300" /></div>}
+          </div>
+          <figcaption className="px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide">{isGrowth ? 'Day 0 baseline' : 'Initial report'}</p>
+            <p className="text-xs text-gray-500">
+              {data.report.created_at ? formatDate(data.report.created_at) : 'No report photo'}
+              {baselinePhotos.length > 1 ? ` · ${baselinePhotos.length} photos` : ''}
+            </p>
+          </figcaption>
+        </figure>
+        <figure className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+          <div className="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
+            {data.after_photo
+              ? <img src={data.after_photo} alt="Latest update" className="w-full h-full object-cover" />
+              : <ImageOff className="w-6 h-6 text-gray-300" />}
+          </div>
+          <figcaption className="px-3 py-2">
+            <p className="text-[10px] font-bold uppercase tracking-wide">Latest update</p>
+            <p className="text-xs text-gray-500">
+              {data.updates[0]?.update_date ? formatDate(data.updates[0].update_date) : 'No update photo yet'}
+            </p>
+          </figcaption>
+        </figure>
       </div>
     </section>
 
