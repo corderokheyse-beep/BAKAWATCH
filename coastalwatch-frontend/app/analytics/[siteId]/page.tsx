@@ -83,6 +83,8 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
   )
 }
 
+const ALLOWED_ANALYTICS_ROLES = ['menro', 'staff', 'admin', 'denr', 'evaluator', 'field_worker', 'volunteer']
+
 export default function SiteAnalyticsPage() {
   const { siteId } = useParams<{ siteId: string }>()
   const router     = useRouter()
@@ -93,6 +95,7 @@ export default function SiteAnalyticsPage() {
   const [site, setSite]             = useState<RestorationSite | null>(null)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
   const [prediction, setPrediction] = useState<GrowthPrediction | null>(null)
   const [predLoading, setPredLoading] = useState(false)
   // Scientific-name → local-name map from the species master data, for the
@@ -102,7 +105,10 @@ export default function SiteAnalyticsPage() {
   useEffect(() => {
     if (authLoading) return
     if (!user) { router.replace('/login'); return }
-    if (!['menro', 'staff', 'admin', 'field_worker', 'volunteer'].includes(user.role)) return
+    if (!ALLOWED_ANALYTICS_ROLES.includes(user.role)) return
+
+    setLoading(true)
+    setError(false)
 
     // Species master data for local names (keyed by lowercased scientific name).
     fetchSpecies()
@@ -115,25 +121,57 @@ export default function SiteAnalyticsPage() {
       })
       .catch(() => {})
 
-    Promise.all([fetchSiteAnalytics(id), fetchSite(id)])
-      .then(([a, s]: [any, any]) => {
-        if (a && a.ecosystem_monthly_avgs && !a.ecosystem_monthly_averages) {
-          a.ecosystem_monthly_averages = a.ecosystem_monthly_avgs
+    Promise.allSettled([fetchSiteAnalytics(id), fetchSite(id)])
+      .then(([analyticsRes, siteRes]) => {
+        const a: any = analyticsRes.status === 'fulfilled' ? analyticsRes.value : null
+        const s: any = siteRes.status === 'fulfilled' ? siteRes.value : null
+
+        if (!a && !s) {
+          setError(true)
+          return
         }
-        setAnalytics(a)
-        setSite(s?.site ?? s)
-        // Fetch predictive analytics after we have the growth data
-        if ((a?.monthly_growth_trend?.length ?? 0) >= 2) {
-          setPredLoading(true)
-          fetchGrowthPrediction(id, 6)
-            .then(pred => { if (!pred.error) setPrediction(pred) })
-            .catch(() => {})
-            .finally(() => setPredLoading(false))
+
+        const resolvedSite: RestorationSite | null = (s?.site ?? s) ?? a?.site ?? null
+        setSite(resolvedSite)
+
+        if (a) {
+          if (a.ecosystem_monthly_avgs && !a.ecosystem_monthly_averages) {
+            a.ecosystem_monthly_averages = a.ecosystem_monthly_avgs
+          }
+          setAnalytics(a)
+          // Fetch predictive analytics after we have the growth data
+          if ((a?.monthly_growth_trend?.length ?? 0) >= 2) {
+            setPredLoading(true)
+            fetchGrowthPrediction(id, 6)
+              .then(pred => { if (!pred.error) setPrediction(pred) })
+              .catch(() => {})
+              .finally(() => setPredLoading(false))
+          }
+        } else if (s) {
+          // Graceful fallback if /api/analytics/{id} failed but /api/sites/{id} succeeded
+          const fallbackTotal = Number(s.survival?.total ?? s.plantation_count ?? 0)
+          const fallbackAlive = Number(s.survival?.alive_count ?? 0)
+          const fallbackDead  = Number(s.survival?.dead_count ?? 0)
+          const fallbackRate  = Number(s.survival?.survival_rate ?? s.survival_rate ?? 0)
+          setAnalytics({
+            site: resolvedSite as RestorationSite,
+            survival_rate: s.survival ?? {
+              total: fallbackTotal,
+              alive_count: fallbackAlive,
+              dead_count: fallbackDead,
+              survival_rate: fallbackRate,
+            },
+            species_distribution: Array.isArray(s.species) ? s.species : [],
+            monthly_growth_trend: [],
+            ecosystem_monthly_averages: [],
+            survival_by_species: [],
+            growth_stage_distribution: [],
+          })
         }
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
-  }, [user, authLoading, id, router])
+  }, [user, authLoading, id, router, reloadTick])
 
   // ── Guards ──────────────────────────────────────────────────────────────────
   if (authLoading || loading) return (
@@ -146,7 +184,7 @@ export default function SiteAnalyticsPage() {
 
   if (!user) return null
 
-  if (!['menro', 'staff', 'admin', 'field_worker', 'volunteer'].includes(user.role)) return (
+  if (!ALLOWED_ANALYTICS_ROLES.includes(user.role)) return (
     <SidebarLayout>
       <div className="page-container flex items-center justify-center py-24">
         <p className="text-gray-500">Access denied.</p>
@@ -158,11 +196,20 @@ export default function SiteAnalyticsPage() {
     <SidebarLayout title="Analytics">
       <div className="page-container flex flex-col items-center justify-center py-24 gap-4 text-center">
         <BarChart2 className="w-10 h-10 text-gray-300" />
-        <p className="text-base font-semibold text-gray-600">Analytics not available</p>
-        <p className="text-sm text-gray-400">No data has been recorded for this site yet.</p>
-        <Link href="/analytics" className="btn-secondary mt-2">
-          <ArrowLeft className="w-4 h-4" /> Back to sites
-        </Link>
+        <p className="text-base font-semibold text-gray-600">Analytics could not be loaded</p>
+        <p className="text-sm text-gray-400">Unable to load analytics for this restoration site. Please try again or return to the sites list.</p>
+        <div className="flex items-center gap-3 mt-2">
+          <button
+            type="button"
+            onClick={() => setReloadTick(t => t + 1)}
+            className="btn-primary"
+          >
+            Retry
+          </button>
+          <Link href="/analytics" className="btn-secondary">
+            <ArrowLeft className="w-4 h-4" /> Back to sites
+          </Link>
+        </div>
       </div>
     </SidebarLayout>
   )

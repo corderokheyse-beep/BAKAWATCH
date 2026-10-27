@@ -8,10 +8,10 @@ class ReportService
 {
     public function __construct(private AnalyticsService $analytics) {}
 
-    // SQLite-compatible AVG rounding — avoids PostgreSQL ::numeric cast
+    // Portable AVG rounding across SQLite and PostgreSQL
     private function avgRound(string $col, int $decimals = 2): string
     {
-        return "ROUND(CAST(AVG({$col}) AS REAL), {$decimals})";
+        return "ROUND(CAST(AVG({$col}) AS NUMERIC), {$decimals})";
     }
 
     /**
@@ -252,7 +252,7 @@ class ReportService
                 COALESCE(SUM(quantity_received), 0) AS total_received,
                 COALESCE(SUM(quantity_planted), 0)  AS total_transferred,
                 COALESCE(SUM(quantity_damaged), 0)  AS total_damaged,
-                COALESCE(SUM(MAX(quantity_received - quantity_planted - quantity_damaged, 0)), 0) AS remaining_stock,
+                COALESCE(SUM(CASE WHEN (quantity_received - quantity_planted - quantity_damaged) > 0 THEN (quantity_received - quantity_planted - quantity_damaged) ELSE 0 END), 0) AS remaining_stock,
                 COUNT(*) AS batch_count
              FROM seedling_inventories {$whereSql}",
             $params
@@ -271,7 +271,7 @@ class ReportService
                     COALESCE(SUM(si.quantity_received), 0) AS received,
                     COALESCE(SUM(si.quantity_planted), 0)  AS transferred,
                     COALESCE(SUM(si.quantity_damaged), 0)  AS damaged,
-                    COALESCE(SUM(MAX(si.quantity_received - si.quantity_planted - si.quantity_damaged, 0)), 0) AS remaining
+                    COALESCE(SUM(CASE WHEN (si.quantity_received - si.quantity_planted - si.quantity_damaged) > 0 THEN (si.quantity_received - si.quantity_planted - si.quantity_damaged) ELSE 0 END), 0) AS remaining
              FROM seedling_inventories si
              LEFT JOIN mangrove_species ms ON ms.scientific_name = si.species_name
              {$whereSql}
@@ -285,7 +285,7 @@ class ReportService
         $stages = DB::select(
             "SELECT stage,
                     COALESCE(SUM(quantity_received), 0) AS received,
-                    COALESCE(SUM(MAX(quantity_received - quantity_planted - quantity_damaged, 0)), 0) AS remaining,
+                    COALESCE(SUM(CASE WHEN (quantity_received - quantity_planted - quantity_damaged) > 0 THEN (quantity_received - quantity_planted - quantity_damaged) ELSE 0 END), 0) AS remaining,
                     COUNT(*) AS batches
              FROM seedling_inventories {$whereSql}
              GROUP BY stage
@@ -299,7 +299,7 @@ class ReportService
                     COALESCE(SUM(quantity_received), 0) AS received,
                     COALESCE(SUM(quantity_planted), 0)  AS transferred,
                     COALESCE(SUM(quantity_damaged), 0)  AS damaged,
-                    COALESCE(SUM(MAX(quantity_received - quantity_planted - quantity_damaged, 0)), 0) AS remaining
+                    COALESCE(SUM(CASE WHEN (quantity_received - quantity_planted - quantity_damaged) > 0 THEN (quantity_received - quantity_planted - quantity_damaged) ELSE 0 END), 0) AS remaining
              FROM seedling_inventories {$whereSql}
              GROUP BY source
              ORDER BY received DESC",

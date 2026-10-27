@@ -85,32 +85,32 @@ class AdminController extends Controller
 
         // Trees planted per month from ACTUAL plantation records (last 12 months).
         $plantingPerMonth = \App\Models\PlantationRecord::select(
-            DB::raw("strftime('%Y-%m', date_planted) as month"),
+            DB::raw("SUBSTR(CAST(date_planted AS TEXT), 1, 7) as month"),
             DB::raw('COUNT(*) as count')
         )
         ->where('date_planted', '>=', now()->subMonths(12)->toDateString())
-        ->groupBy('month')
+        ->groupBy(DB::raw("SUBSTR(CAST(date_planted AS TEXT), 1, 7)"))
         ->orderBy('month')
         ->get();
 
         // Monthly survival-rate trend from ACTUAL monitoring records.
         $survivalTrend = DB::select(
-            "SELECT strftime('%Y-%m', monitoring_date) AS month,
-                    ROUND(COUNT(CASE WHEN survival_status = 'alive' THEN 1 END) * 100.0 / COUNT(*), 1) AS rate
+            "SELECT SUBSTR(CAST(monitoring_date AS TEXT), 1, 7) AS month,
+                    ROUND(CAST(COUNT(CASE WHEN survival_status = 'alive' THEN 1 END) * 100.0 / COUNT(*) AS NUMERIC), 1) AS rate
              FROM monitoring_records
              WHERE monitoring_date >= ?
-             GROUP BY month
+             GROUP BY SUBSTR(CAST(monitoring_date AS TEXT), 1, 7)
              ORDER BY month",
             [now()->subMonths(12)->toDateString()]
         );
 
-        // Reports over time (last 12 months) — SQLite-compatible with strftime
+        // Reports over time (last 12 months) — portable across SQLite and PostgreSQL
         $reportsOverTime = Report::select(
-            DB::raw("strftime('%Y-%m', created_at) as month"),
+            DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 7) as month"),
             DB::raw('COUNT(*) as count')
         )
         ->where('created_at', '>=', now()->subMonths(12))
-        ->groupBy('month')
+        ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 7)"))
         ->orderBy('month')
         ->get();
 
@@ -164,15 +164,15 @@ class AdminController extends Controller
         // "Successful events" = all activity-log entries per day.
         // "Security alerts"   = failed login attempts per day (real security signal).
         $activityByDay = ActivityLog::where('created_at', '>=', now()->subDays(6)->startOfDay())
-            ->select(DB::raw("strftime('%Y-%m-%d', created_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->orderBy('date')->get()
+            ->select(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10)"))->orderBy('date')->get()
             ->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $alertsByDay = DB::table('login_attempts')
             ->where('succeeded', false)
             ->where('attempted_at', '>=', now()->subDays(6)->startOfDay())
-            ->select(DB::raw("strftime('%Y-%m-%d', attempted_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->orderBy('date')->get()
+            ->select(DB::raw("SUBSTR(CAST(attempted_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(attempted_at AS TEXT), 1, 10)"))->orderBy('date')->get()
             ->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $systemActivity = $this->denseDailySeries(7, function (string $date) use ($activityByDay, $alertsByDay) {
@@ -247,20 +247,20 @@ class AdminController extends Controller
         $since = now()->subDays(6)->startOfDay();
 
         $threatByDay = Report::where('created_at', '>=', $since)
-            ->select(DB::raw("strftime('%Y-%m-%d', created_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
+            ->select(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10)"))->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $monitoringByDay = MonitoringRecord::where('monitoring_date', '>=', $since->toDateString())
-            ->select(DB::raw("strftime('%Y-%m-%d', monitoring_date) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
+            ->select(DB::raw("SUBSTR(CAST(monitoring_date AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(monitoring_date AS TEXT), 1, 10)"))->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $eventsByDay = PlantingEvent::where('created_at', '>=', $since)
-            ->select(DB::raw("strftime('%Y-%m-%d', created_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
+            ->select(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10)"))->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $userActivityByDay = ActivityLog::where('created_at', '>=', $since)
-            ->select(DB::raw("strftime('%Y-%m-%d', created_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
+            ->select(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10)"))->pluck('count', 'date')->map(fn ($v) => (int) $v)->toArray();
 
         $toSeries = fn (array $byDay) => $this->denseDailySeries(7, fn (string $date) => [
             'date' => $date, 'count' => $byDay[$date] ?? 0,
@@ -764,8 +764,8 @@ class AdminController extends Controller
             ->get();
 
         $activityOverTime = ActivityLog::whereBetween('created_at', [$from, $to])
-            ->select(DB::raw("strftime('%Y-%m-%d', created_at) as date"), DB::raw('COUNT(*) as count'))
-            ->groupBy('date')
+            ->select(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10) as date"), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw("SUBSTR(CAST(created_at AS TEXT), 1, 10)"))
             ->orderBy('date')
             ->get();
 

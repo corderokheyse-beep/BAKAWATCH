@@ -64,6 +64,8 @@ class RestorationSiteController extends Controller
     /** Public — all non-deleted sites with GeoJSON boundary */
     public function index(): JsonResponse
     {
+        $statsBySite = $this->analytics->survivalSummaryBySite();
+
         if (!$this->hasPostGIS()) {
             $sites = RestorationSite::with([
                     'assignedWorker:id,name',
@@ -76,14 +78,21 @@ class RestorationSiteController extends Controller
                 ->whereNull('deleted_at')
                 ->orderBy('created_at', 'desc')
                 ->get()
-                ->map(fn($s) => array_merge($s->toArray(), ['boundary_geojson' => null]));
+                ->map(function ($s) use ($statsBySite) {
+                    $stats = $statsBySite[$s->id] ?? ['plantation_count' => 0, 'survival_rate' => null];
+                    return array_merge($s->toArray(), [
+                        'boundary_geojson' => $s->boundary_geojson ?? null,
+                        'plantation_count' => $stats['plantation_count'],
+                        'survival_rate'    => $stats['survival_rate'],
+                    ]);
+                });
             return response()->json($sites);
         }
 
         $sites = DB::select(
             "SELECT id, name, description, area_hectares, planted_hectares, barangay, status,
                     established_year, latitude, longitude, created_by, assigned_to, created_at, updated_at,
-                    boundary_type, ST_AsGeoJSON(boundary) AS boundary_geojson
+                    boundary_type, COALESCE(ST_AsGeoJSON(boundary), boundary_geojson) AS boundary_geojson
              FROM restoration_sites
              WHERE deleted_at IS NULL
              ORDER BY created_at DESC"
@@ -118,6 +127,9 @@ class RestorationSiteController extends Controller
             ])->values();
             $s->species_list_count = $list->count();
             $s->areas = ($areasBySite->get($s->id) ?? collect())->values();
+            $stats = $statsBySite[$s->id] ?? ['plantation_count' => 0, 'survival_rate' => null];
+            $s->plantation_count = $stats['plantation_count'];
+            $s->survival_rate    = $stats['survival_rate'];
         }
 
         return response()->json($sites);

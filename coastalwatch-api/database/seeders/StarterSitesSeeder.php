@@ -45,10 +45,11 @@ class StarterSitesSeeder extends Seeder
             ['Tambong Mangrove Conservation Zone',  'Tambong',       9.3, 2019, 12.9720401, 121.4888646],
         ];
 
-        $firstSite = null;
+        $seededSites = [];
         foreach ($sites as [$name, $barangay, $area, $year, $lat, $lng]) {
-            if (RestorationSite::where('name', $name)->exists()) {
-                if (! $firstSite) $firstSite = RestorationSite::where('name', $name)->first();
+            $existing = RestorationSite::where('name', $name)->first();
+            if ($existing) {
+                $seededSites[] = $existing;
                 continue;
             }
             $site = RestorationSite::create([
@@ -62,18 +63,28 @@ class StarterSitesSeeder extends Seeder
                 'latitude'         => $lat,
                 'longitude'        => $lng,
             ]);
-            if (! $firstSite) $firstSite = $site;
+            $seededSites[] = $site;
         }
 
-        // Seed a little plantation + monitoring data on the first site so the
-        // Analytics charts (survival rate, species, growth) have something real.
-        if ($firstSite && PlantationRecord::where('restoration_site_id', $firstSite->id)->count() === 0) {
-            $species = ['Rhizophora mucronata', 'Avicennia marina', 'Sonneratia alba', 'Bruguiera gymnorrhiza', 'Ceriops tagal'];
-            foreach ($species as $i => $sp) {
-                $lat = (float) $firstSite->latitude + ($i * 0.0004);
-                $lng = (float) $firstSite->longitude + ($i * 0.0004);
+        // Seed starter plantation + monitoring data on starter sites that have
+        // no plantation records yet so Analytics charts (survival rate, species,
+        // growth) render across all starter sites.
+        $speciesPool = [
+            'Rhizophora mucronata',
+            'Avicennia marina',
+            'Sonneratia alba',
+            'Bruguiera gymnorrhiza',
+            'Ceriops tagal',
+        ];
+        foreach ($seededSites as $siteIdx => $site) {
+            if (PlantationRecord::where('restoration_site_id', $site->id)->count() > 0) {
+                continue;
+            }
+            foreach ($speciesPool as $i => $sp) {
+                $lat = (float) $site->latitude + ($i * 0.0004);
+                $lng = (float) $site->longitude + ($i * 0.0004);
                 $pr = PlantationRecord::create([
-                    'restoration_site_id' => $firstSite->id,
+                    'restoration_site_id' => $site->id,
                     'submitted_by'        => $fieldId,
                     'species_name'        => $sp,
                     'date_planted'        => now()->subDays(90 - $i * 10)->toDateString(),
@@ -89,7 +100,7 @@ class StarterSitesSeeder extends Seeder
                         'plantation_record_id' => $pr->id,
                         'submitted_by'         => $fieldId,
                         'monitoring_date'      => now()->subDays($daysAgo)->toDateString(),
-                        'height_cm'            => 25 + $i * 5 + $j * 8,
+                        'height_cm'            => 24 + ($siteIdx % 4) * 2 + $i * 5 + $j * 8,
                         'diameter_cm'          => 1.2 + $i * 0.2 + $j * 0.3,
                         'survival_status'      => ($i === 4 && $j === 1) ? 'dead' : 'alive',
                         'growth_stage'         => $j === 0 ? 'seedling' : 'sapling',

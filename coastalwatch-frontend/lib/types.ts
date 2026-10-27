@@ -384,10 +384,15 @@ export interface EcosystemAveragePoint {
 }
 
 export interface SiteAnalytics {
+  site?: RestorationSite
   survival_rate: SurvivalRateData
   species_distribution: SpeciesDistributionItem[]
   monthly_growth_trend: GrowthTrendPoint[]
   ecosystem_monthly_averages: EcosystemAveragePoint[]
+  ecosystem_monthly_avgs?: EcosystemAveragePoint[]
+  survival_by_species?: { species_name: string; total: number; alive_count: number; dead_count: number; survival_rate: number }[]
+  growth_stage_distribution?: { stage: string; count: number }[]
+  event_accomplishments?: any[]
 }
 
 // ─── Articles & Tips ──────────────────────────────────────────────────────────

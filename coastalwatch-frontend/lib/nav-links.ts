@@ -1,4 +1,4 @@
-﻿import {
+import {
   LayoutDashboard, Map, CalendarDays, Users, Leaf, FileText,
   BarChart2, Activity, TreePine,
   AlertTriangle, Database, BookOpen, Sprout, Settings,
@@ -44,6 +44,7 @@ export function getNavLinks(role?: string): NavLink[] {
         { href: '/sites',            label: 'Sites',           icon: Leaf },
         { href: '/seedlings',        label: 'Inventory',  icon: Sprout },
         { href: '/reports/mangrove', label: 'Reports',         icon: FileText },
+        { href: '/analytics',        label: 'Analytics',       icon: BarChart2 },
         { href: '/articles/manage',  label: 'Tips & Guides',   icon: BookOpen },
       ]
 

@@ -45,13 +45,14 @@ export const fetchSite = (id: number) =>
       return {
         ...site,
         plantation_count,
-        survival_rate: survival?.survival_rate ?? null,
+        survival_rate: (plantation_count ?? 0) > 0 ? (survival?.survival_rate ?? null) : null,
+        survival: survival ?? null,
         species: species ?? [],
         site_species: site_species ?? [],
         // Drawn areas (green mangrove + red planted) live alongside `site` in
         // the response — carry them through so the map can render every area.
         areas: areas ?? [],
-      } as RestorationSite
+      } as RestorationSite & { survival?: any; species?: any[] }
     })
 
 export const createSite = (data: FormData) =>

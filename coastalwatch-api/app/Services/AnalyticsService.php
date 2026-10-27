@@ -99,6 +99,52 @@ class AnalyticsService
     }
 
     /**
+     * Batch-compute plantation_count and survival_rate keyed by restoration_site_id
+     * in a single query (used by RestorationSiteController@index to avoid N+1).
+     *
+     * @return array<int, array{plantation_count: int, survival_rate: float|null}>
+     */
+    public function survivalSummaryBySite(): array
+    {
+        $cfg                 = config('monitoring.survival');
+        $includeReplacements = (bool) ($cfg['include_replacements_in_denominator'] ?? false);
+        $hasReplacementCol   = $this->columnExists('plantation_records', 'is_replacement');
+        $replacementExpr     = $hasReplacementCol ? 'pr.is_replacement' : 'FALSE';
+
+        $rows = DB::select(
+            "SELECT
+                pr.restoration_site_id,
+                COUNT(*) AS total_records,
+                COUNT(CASE WHEN mr_last.survival_status = 'alive' THEN 1 END) AS alive_count,
+                COUNT(CASE WHEN {$replacementExpr} IS TRUE THEN 1 END) AS replacement_count
+            FROM plantation_records pr
+            LEFT JOIN (
+                SELECT mr.plantation_record_id, mr.survival_status,
+                       ROW_NUMBER() OVER (PARTITION BY mr.plantation_record_id ORDER BY mr.monitoring_date DESC) AS rn
+                FROM monitoring_records mr
+            ) mr_last ON mr_last.plantation_record_id = pr.id AND mr_last.rn = 1
+            GROUP BY pr.restoration_site_id"
+        );
+
+        $map = [];
+        foreach ($rows as $row) {
+            $siteId           = (int) $row->restoration_site_id;
+            $totalRecords     = (int) ($row->total_records ?? 0);
+            $aliveCount       = (int) ($row->alive_count ?? 0);
+            $replacementCount = (int) ($row->replacement_count ?? 0);
+            $denominator      = $includeReplacements ? $totalRecords : max($totalRecords - $replacementCount, 0);
+            $rate             = $denominator > 0 ? round($aliveCount * 100.0 / $denominator, 2) : null;
+
+            $map[$siteId] = [
+                'plantation_count' => $totalRecords,
+                'survival_rate'    => $totalRecords > 0 ? $rate : null,
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
      * Portable check for whether a column exists, so newer analytics keeps
      * working on installations that haven't run later migrations yet.
      */
@@ -116,7 +162,7 @@ class AnalyticsService
         $rows = DB::select(
             "SELECT species_name,
                     COUNT(*) AS count,
-                    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) AS percentage
+                    ROUND(CAST(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () AS NUMERIC), 2) AS percentage
              FROM plantation_records
              WHERE restoration_site_id = ?
              GROUP BY species_name",
@@ -126,48 +172,48 @@ class AnalyticsService
         return array_map(fn($r) => [
             'species_name' => $r->species_name,
             'count'        => (int) $r->count,
-            'percentage'   => (float) $r->percentage,
+            'percentage'   => round((float) $r->percentage, 2),
         ], $rows);
     }
 
     public function monthlyGrowthTrend(int $siteId): array
     {
         $rows = DB::select(
-            "SELECT strftime('%Y-%m', monitoring_date) AS month,
-                    ROUND(AVG(height_cm), 2) AS avg_height
+            "SELECT SUBSTR(CAST(monitoring_date AS TEXT), 1, 7) AS month,
+                    AVG(height_cm) AS avg_height
              FROM monitoring_records mr
              JOIN plantation_records pr ON mr.plantation_record_id = pr.id
              WHERE pr.restoration_site_id = ?
-             GROUP BY month
+             GROUP BY SUBSTR(CAST(monitoring_date AS TEXT), 1, 7)
              ORDER BY month",
             [$siteId]
         );
 
         return array_map(fn($r) => [
-            'month'      => substr($r->month, 0, 7), // YYYY-MM
-            'avg_height' => (float) $r->avg_height,
+            'month'      => substr((string) $r->month, 0, 7), // YYYY-MM
+            'avg_height' => round((float) $r->avg_height, 2),
         ], $rows);
     }
 
     public function ecosystemMonthlyAverages(int $siteId): array
     {
         $rows = DB::select(
-            "SELECT strftime('%Y-%m', measurement_date) AS month,
-                    ROUND(AVG(soil_salinity_ppt), 2) AS avg_salinity,
-                    ROUND(AVG(water_ph), 2) AS avg_ph,
-                    ROUND(AVG(water_temp_celsius), 2) AS avg_temp
+            "SELECT SUBSTR(CAST(measurement_date AS TEXT), 1, 7) AS month,
+                    AVG(soil_salinity_ppt) AS avg_salinity,
+                    AVG(water_ph) AS avg_ph,
+                    AVG(water_temp_celsius) AS avg_temp
              FROM ecosystem_records
              WHERE restoration_site_id = ?
-             GROUP BY month
+             GROUP BY SUBSTR(CAST(measurement_date AS TEXT), 1, 7)
              ORDER BY month",
             [$siteId]
         );
 
         return array_map(fn($r) => [
-            'month'        => substr($r->month, 0, 7),
-            'avg_salinity' => (float) $r->avg_salinity,
-            'avg_ph'       => (float) $r->avg_ph,
-            'avg_temp'     => (float) $r->avg_temp,
+            'month'        => substr((string) $r->month, 0, 7),
+            'avg_salinity' => round((float) $r->avg_salinity, 2),
+            'avg_ph'       => round((float) $r->avg_ph, 2),
+            'avg_temp'     => round((float) $r->avg_temp, 2),
         ], $rows);
     }
 

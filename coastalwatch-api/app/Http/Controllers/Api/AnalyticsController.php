@@ -19,21 +19,32 @@ class AnalyticsController extends Controller
         if ($request->user()?->role === 'field_worker' && (int) $restorationSite->assigned_to !== (int) $request->user()->id) {
             abort(403, 'You can only view analytics for your assigned site.');
         }
-        return response()->json([
-            'site'                     => $restorationSite->load('speciesList:id,scientific_name,local_name'),
-            'survival_rate'            => $this->analytics->survivalRate($restorationSite->id),
-            'survival_by_species'      => $this->analytics->survivalBySpecies($restorationSite->id),
-            'growth_stage_distribution'=> $this->analytics->growthStageDistribution($restorationSite->id),
-            'species_distribution'     => $this->analytics->speciesDistribution($restorationSite->id),
-            'monthly_growth_trend'     => $this->analytics->monthlyGrowthTrend($restorationSite->id),
-            'ecosystem_monthly_avgs'   => $this->analytics->ecosystemMonthlyAverages($restorationSite->id),
-            'event_accomplishments'    => \App\Models\EventAccomplishmentReport::with([
+        $ecosystemAvgs = $this->analytics->ecosystemMonthlyAverages($restorationSite->id);
+
+        try {
+            $eventAccomplishments = \App\Models\EventAccomplishmentReport::with([
                 'event:id,name,scheduled_at',
                 'user:id,name',
                 'species:id,scientific_name,local_name',
                 'report.updates.updater:id,name',
             ])
-                ->where('restoration_site_id', $restorationSite->id)->latest('submitted_at')->get(),
+                ->where('restoration_site_id', $restorationSite->id)
+                ->latest('submitted_at')
+                ->get();
+        } catch (\Throwable $e) {
+            $eventAccomplishments = [];
+        }
+
+        return response()->json([
+            'site'                       => $restorationSite->load('speciesList:id,scientific_name,local_name'),
+            'survival_rate'              => $this->analytics->survivalRate($restorationSite->id),
+            'survival_by_species'        => $this->analytics->survivalBySpecies($restorationSite->id),
+            'growth_stage_distribution'  => $this->analytics->growthStageDistribution($restorationSite->id),
+            'species_distribution'       => $this->analytics->speciesDistribution($restorationSite->id),
+            'monthly_growth_trend'       => $this->analytics->monthlyGrowthTrend($restorationSite->id),
+            'ecosystem_monthly_avgs'     => $ecosystemAvgs,
+            'ecosystem_monthly_averages' => $ecosystemAvgs,
+            'event_accomplishments'      => $eventAccomplishments,
         ]);
     }
 
