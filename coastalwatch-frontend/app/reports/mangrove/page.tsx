@@ -440,6 +440,9 @@ export default function MangroveReportsPage() {
   const [sites, setSites]       = useState<RestorationSite[]>([])
   const [history, setHistory]   = useState<(GeneratedReport & { site?: { id: number; name: string } })[]>([])
   const [loadingInit, setLoadingInit] = useState(true)
+  const [reportHistory, setReportHistory] = useState<PaginatedResponse<Report> | null>(null)
+  const [reportHistoryPage, setReportHistoryPage] = useState(1)
+  const [reportHistoryLoading, setReportHistoryLoading] = useState(false)
 
   // -- Generate form ---------------------------------------------------------
   const [reportType, setReportType] = useState<ReportType>('monthly')
@@ -535,11 +538,31 @@ export default function MangroveReportsPage() {
     finally { setThreatLoading(false) }
   }, [threatPage, threatSearch, threatStatusFilter, threatCategory, threatDateFrom, threatDateTo])
 
+  const loadReportHistory = useCallback(async () => {
+    setReportHistoryLoading(true)
+    try {
+      const { data } = await api.get<PaginatedResponse<Report>>('/reports', {
+        params: { page: reportHistoryPage, per_page: 10 },
+      })
+      setReportHistory(data)
+    } catch {
+      toast.error('Failed to load report history.')
+    } finally {
+      setReportHistoryLoading(false)
+    }
+  }, [reportHistoryPage])
+
   useEffect(() => {
     if (tab === 'review' && user && (user.role === 'menro' || user.role === 'staff')) {
       loadThreats()
     }
   }, [tab, loadThreats, user])
+
+  useEffect(() => {
+    if (tab === 'history' && user && (user.role === 'menro' || user.role === 'staff')) {
+      loadReportHistory()
+    }
+  }, [tab, loadReportHistory, user])
 
   // -- Generate report -------------------------------------------------------
   const handleGenerate = async () => {
@@ -1581,74 +1604,151 @@ export default function MangroveReportsPage() {
               <div className="space-y-4 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-gray-700">
-                    {history.length} report{history.length !== 1 ? 's' : ''} generated
+                    {reportHistory?.total ?? 0} submitted report{reportHistory?.total !== 1 ? 's' : ''}
                   </p>
-                  <button onClick={() => fetchGeneratedReports().then(r => setHistory(r as any)).catch(() => {})}
-                    className="btn-ghost text-xs gap-1.5">
+                  <button
+                    onClick={() => {
+                      loadReportHistory()
+                      fetchGeneratedReports()
+                        .then(reports => setHistory(reports as any))
+                        .catch(() => toast.error('Failed to refresh generated reports.'))
+                    }}
+                    disabled={reportHistoryLoading}
+                    className="btn-ghost text-xs gap-1.5 disabled:opacity-50">
                     <RefreshCw className="w-3.5 h-3.5" /> Refresh
                   </button>
                 </div>
 
-                {history.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-                    <History className="w-10 h-10 opacity-25" />
-                    <p className="text-sm">No reports generated yet. Use the Generate tab to create one.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          {['Type', 'Site', 'Period / Range', 'Generated', 'Download'].map(h => (
-                            <th key={h} className="table-header">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {history.map(r => (
-                          <tr key={r.id} className="hover:bg-gray-50/70 transition-colors">
-                            <td className="table-cell">
-                              <span className="text-xs font-bold bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full uppercase tracking-wide">
-                                {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
-                              </span>
-                            </td>
-                            <td className="table-cell text-gray-600">
-                              {(r as any).site?.name ?? (r.restoration_site_id ? `Site #${r.restoration_site_id}` : 'All sites')}
-                            </td>
-                            <td className="table-cell text-gray-500 tabular-nums">
-                              {r.date_from && r.date_to
-                                ? `${String(r.date_from).split('T')[0]} – ${String(r.date_to).split('T')[0]}`
-                                : r.date_from
-                                  ? String(r.date_from).split('T')[0]
-                                  : '—'}
-                            </td>
-                            <td className="table-cell text-gray-400 whitespace-nowrap tabular-nums">
-                              {r.created_at.split('T')[0]}
-                            </td>
-                            <td className="table-cell">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => handleHistoryDownload(r)}
-                                  disabled={downloading === r.id}
-                                  className="btn-secondary text-xs py-1.5 px-3 gap-1.5">
-                                  <FileDown className="w-3.5 h-3.5" />
-                                  {downloading === r.id ? '…' : 'CSV'}
-                                </button>
-                                <button
-                                  onClick={() => handleHistoryDownloadPDF(r)}
-                                  disabled={downloadingPdf === r.id}
-                                  className="btn-secondary text-xs py-1.5 px-3 gap-1.5">
-                                  <Download className="w-3.5 h-3.5" />
-                                  {downloadingPdf === r.id ? '…' : 'PDF'}
-                                </button>
-                              </div>
-                            </td>
+                <section className="space-y-3">
+                  <h3 className="text-sm font-bold text-gray-700">Submitted Report History</h3>
+                  {reportHistoryLoading ? (
+                    <div className="flex justify-center py-8"><LoadingSpinner /></div>
+                  ) : !reportHistory?.data?.length ? (
+                    <div className="rounded-xl border border-gray-200 py-10 text-center text-sm text-gray-400">
+                      No submitted reports found.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            {['#', 'Title', 'Category', 'Status', 'Location', 'Submitted By', 'Date', ''].map((h, index) => (
+                              <th key={`${h}-${index}`} className="table-header">{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {reportHistory.data.map(report => (
+                            <tr key={report.id} className="hover:bg-gray-50/70">
+                              <td className="table-cell font-mono text-xs text-gray-400">#{report.id}</td>
+                              <td className="table-cell font-medium text-gray-800 max-w-[220px]">
+                                <span className="block truncate" title={report.title}>{report.title}</span>
+                              </td>
+                              <td className="table-cell">
+                                <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full border', CATEGORY_COLORS[report.category] ?? CATEGORY_COLORS.other)}>
+                                  {report.report_type === 'event_accomplishment' ? 'Event accomplishment' : report.category}
+                                </span>
+                              </td>
+                              <td className="table-cell"><Badge label={report.status} type="status" /></td>
+                              <td className="table-cell text-gray-500">{report.location_name ?? '—'}</td>
+                              <td className="table-cell text-gray-500">{report.user?.name ?? '—'}</td>
+                              <td className="table-cell text-gray-400 whitespace-nowrap tabular-nums">{formatDate(report.created_at)}</td>
+                              <td className="table-cell">
+                                <button
+                                  onClick={() => router.push(`/reports/${report.id}`)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                  title="View report details">
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {reportHistory && reportHistory.last_page > 1 && (
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Page {reportHistory.current_page} of {reportHistory.last_page} · {reportHistory.total} reports</span>
+                      <div className="flex gap-2">
+                        <button
+                          disabled={reportHistoryPage <= 1 || reportHistoryLoading}
+                          onClick={() => setReportHistoryPage(page => page - 1)}
+                          className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40">Previous</button>
+                        <button
+                          disabled={reportHistoryPage >= reportHistory.last_page || reportHistoryLoading}
+                          onClick={() => setReportHistoryPage(page => page + 1)}
+                          className="btn-secondary text-xs py-1.5 px-3 disabled:opacity-40">Next</button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="space-y-3 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-gray-700">Generated Summary Reports</h3>
+                    <span className="text-xs text-gray-500">{history.length} generated</span>
                   </div>
-                )}
+                  {history.length === 0 ? (
+                    <div className="rounded-xl border border-gray-200 py-8 text-center text-sm text-gray-400">
+                      No summary reports generated yet. Use the Generate Report tab to create one.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-gray-200">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            {['Type', 'Site', 'Period / Range', 'Generated', 'Download'].map(h => (
+                              <th key={h} className="table-header">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {history.map(r => (
+                            <tr key={r.id} className="hover:bg-gray-50/70 transition-colors">
+                              <td className="table-cell">
+                                <span className="text-xs font-bold bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full uppercase tracking-wide">
+                                  {REPORT_TYPE_LABELS[r.report_type] ?? r.report_type}
+                                </span>
+                              </td>
+                              <td className="table-cell text-gray-600">
+                                {(r as any).site?.name ?? (r.restoration_site_id ? `Site #${r.restoration_site_id}` : 'All sites')}
+                              </td>
+                              <td className="table-cell text-gray-500 tabular-nums">
+                                {r.date_from && r.date_to
+                                  ? `${String(r.date_from).split('T')[0]} – ${String(r.date_to).split('T')[0]}`
+                                  : r.date_from
+                                    ? String(r.date_from).split('T')[0]
+                                    : '—'}
+                              </td>
+                              <td className="table-cell text-gray-400 whitespace-nowrap tabular-nums">
+                                {r.created_at.split('T')[0]}
+                              </td>
+                              <td className="table-cell">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleHistoryDownload(r)}
+                                    disabled={downloading === r.id}
+                                    className="btn-secondary text-xs py-1.5 px-3 gap-1.5">
+                                    <FileDown className="w-3.5 h-3.5" />
+                                    {downloading === r.id ? '…' : 'CSV'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleHistoryDownloadPDF(r)}
+                                    disabled={downloadingPdf === r.id}
+                                    className="btn-secondary text-xs py-1.5 px-3 gap-1.5">
+                                    <Download className="w-3.5 h-3.5" />
+                                    {downloadingPdf === r.id ? '…' : 'PDF'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 
