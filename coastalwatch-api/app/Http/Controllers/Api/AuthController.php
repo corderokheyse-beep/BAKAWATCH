@@ -52,6 +52,7 @@ class AuthController extends Controller
             'phone'             => $validated['phone'] ?? null,
             'organization'      => $validated['organization'] ?? null,
             'role'              => 'user',
+            'is_active'         => true,
             'email_verified_at' => now(),
         ]);
 
@@ -140,8 +141,10 @@ class AuthController extends Controller
     public function firebaseAuth(Request $request): JsonResponse
     {
         $request->validate([
-            'id_token' => 'required|string',
-            'name'     => 'sometimes|string|max:255', // used only when provisioning
+            'id_token'     => 'required|string',
+            'name'         => 'sometimes|string|max:255', // used only when provisioning
+            'phone'        => 'nullable|string|max:20',
+            'organization' => 'nullable|string|max:255',
         ]);
 
         try {
@@ -159,8 +162,14 @@ class AuthController extends Controller
 
         // Match by Firebase UID first, then fall back to email (first-time link
         // for a legacy account created before Firebase was enabled).
-        $user = User::where('firebase_uid', $uid)->first()
-            ?? User::where('email', $email)->first();
+        $user = User::withTrashed()->where('firebase_uid', $uid)->first()
+            ?? User::withTrashed()->where('email', $email)->first();
+
+        if ($user && $user->trashed()) {
+            return response()->json([
+                'message' => 'Your account has been deactivated. Please contact your administrator.',
+            ], 403);
+        }
 
         if (!$user) {
             // Provision a new local account for a brand-new Firebase user.
@@ -171,13 +180,29 @@ class AuthController extends Controller
                 // Local password is unused for Firebase accounts; store a random
                 // unusable value so the column constraint is satisfied.
                 'password'          => Hash::make(Str::random(40)),
+                'phone'             => $request->input('phone') ?: null,
+                'organization'      => $request->input('organization') ?: null,
                 'role'              => 'user',
+                'is_active'         => true,
                 'email_verified_at' => ($claims['email_verified'] ?? false) ? now() : null,
             ]);
             ActivityLog::record('user.registered', $user);
-        } elseif ($user->firebase_uid !== $uid) {
-            // Link the Firebase identity to the existing account on first use.
-            $user->forceFill(['firebase_uid' => $uid])->save();
+        } else {
+            // Link the Firebase identity to the existing account on first use,
+            // and fill optional profile fields if supplied during registration.
+            $updates = [];
+            if ($user->firebase_uid !== $uid) {
+                $updates['firebase_uid'] = $uid;
+            }
+            if ($request->filled('phone') && empty($user->phone)) {
+                $updates['phone'] = $request->input('phone');
+            }
+            if ($request->filled('organization') && empty($user->organization)) {
+                $updates['organization'] = $request->input('organization');
+            }
+            if (!empty($updates)) {
+                $user->forceFill($updates)->save();
+            }
         }
 
         if (!$user->is_active) {

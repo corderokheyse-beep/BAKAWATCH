@@ -103,21 +103,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Register the account in Firebase, then provision/link it in the app.
   const register = async (formData: RegisterData) => {
-    const idToken = await firebaseRegister(formData.email, formData.password)
-    const { data } = await api.post('/auth/firebase', { id_token: idToken, name: formData.name })
+    let idToken: string
+    try {
+      idToken = await firebaseRegister(formData.email, formData.password)
+    } catch (err: any) {
+      // If a previous registration attempt created the Firebase user but failed
+      // before backend provisioning completed, sign in with the same credentials
+      // so the user can finish account provisioning seamlessly.
+      if (err?.code === 'auth/email-already-in-use') {
+        try {
+          idToken = await firebaseSignIn(formData.email, formData.password)
+        } catch {
+          throw err
+        }
+      } else {
+        throw err
+      }
+    }
+
+    const payload = {
+      id_token: idToken,
+      name: formData.name,
+      phone: formData.phone || undefined,
+      organization: formData.organization || undefined,
+    }
+
+    let data: any
+    try {
+      const res = await api.post('/auth/firebase', payload)
+      data = res.data
+    } catch (err: any) {
+      // Guard against older backend deployments where User::create() did not
+      // hydrate the DB default `is_active = true` in memory on the first call,
+      // returning 403 even though the DB row was created with is_active = true.
+      if (axios.isAxiosError(err) && err.response?.status === 403) {
+        const retryRes = await api.post('/auth/firebase', payload)
+        data = retryRes.data
+      } else {
+        throw err
+      }
+    }
+
+    // Set token cookie BEFORE any authenticated follow-up requests (such as /auth/profile)
+    Cookies.set('token', data.token, { expires: 7, sameSite: 'lax' })
+    setToken(data.token)
+
+    let finalUser: User = data.user
     // Attach the extra profile fields that Firebase doesn't hold.
-    if (formData.phone || formData.organization) {
+    if (
+      (formData.phone && !data.user?.phone) ||
+      (formData.organization && !data.user?.organization)
+    ) {
       try {
-        await api.put('/auth/profile', {
+        const profileRes = await api.put('/auth/profile', {
+          name: formData.name,
           phone: formData.phone,
           organization: formData.organization,
         })
+        if (profileRes.data?.user) {
+          finalUser = profileRes.data.user
+        }
       } catch { /* non-blocking: profile extras can be set later */ }
     }
-    Cookies.set('token', data.token, { expires: 7, sameSite: 'lax' })
-    setToken(data.token)
-    setUser(data.user)
-    try { localStorage.setItem('cw_user', JSON.stringify(data.user)) } catch {}
+
+    setUser(finalUser)
+    try { localStorage.setItem('cw_user', JSON.stringify(finalUser)) } catch {}
   }
 
   const logout = async () => {

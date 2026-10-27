@@ -23,6 +23,11 @@ class User extends Authenticatable
         'name', 'email', 'firebase_uid', 'password', 'role', 'phone', 'organization', 'is_active', 'fcm_token',
     ];
 
+    protected $attributes = [
+        'role'      => 'user',
+        'is_active' => true,
+    ];
+
     protected $hidden = ['password', 'remember_token'];
 
     protected $casts = [
