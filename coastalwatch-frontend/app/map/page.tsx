@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import nextDynamic from 'next/dynamic'
 import SidebarLayout from '@/components/layout/SidebarLayout'
 import Badge from '@/components/ui/Badge'
@@ -825,6 +826,13 @@ function MapPageInner() {
                         {selectedSite.description && (
                           <p className="text-xs text-gray-500 leading-relaxed">{selectedSite.description}</p>
                         )}
+
+                        <Link
+                          href={`/sites/${selectedSite.id}`}
+                          className="w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary-50 border border-primary-100 text-primary-700 text-xs font-semibold hover:bg-primary-100"
+                        >
+                          View site details <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
                     </>
                   )

@@ -146,21 +146,39 @@ export default function SitePolygonMap({
   const [species, setSpecies]   = useState<SiteSpeciesRef[] | null>(null)
   const [speciesLoading, setSpeciesLoading] = useState(false)
 
-  // Curated species inventory for the selected site. The list payload already
-  // carries species_list; we hydrate the richer site_species from the detail
-  // endpoint for completeness.
+  // Curated species inventory + detail hydration for the selected site.
+  const selectedId = selected?.id ?? null
   useEffect(() => {
-    if (!selected) { setSpecies(null); return }
+    if (!selectedId) { setSpecies(null); return }
     let cancelled = false
-    // Seed immediately from the list payload so the count/list show at once.
-    setSpecies(selected.species_list ?? null)
+    const initialSpecies = selected?.site_species ?? selected?.species_list ?? null
+    setSpecies(initialSpecies)
     setSpeciesLoading(true)
-    api.get(`/sites/${selected.id}`)
-      .then(({ data }) => { if (!cancelled) setSpecies(data.site_species ?? selected.species_list ?? []) })
-      .catch(() => { if (!cancelled) setSpecies(selected.species_list ?? []) })
+    api.get(`/sites/${selectedId}`)
+      .then(({ data }) => {
+        if (cancelled) return
+        const resolvedSpecies = data.site_species ?? selected?.site_species ?? selected?.species_list ?? []
+        setSpecies(resolvedSpecies)
+        setSelected(prev => {
+          if (!prev || prev.id !== selectedId) return prev
+          return {
+            ...prev,
+            ...(data.site ?? {}),
+            plantation_count: data.plantation_count ?? prev.plantation_count,
+            survival_rate: (data.plantation_count ?? prev.plantation_count ?? 0) > 0
+              ? (data.survival?.survival_rate ?? prev.survival_rate ?? null)
+              : (prev.survival_rate ?? null),
+            site_species: resolvedSpecies,
+            species_list_count: data.site_species_count ?? resolvedSpecies.length,
+          }
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setSpecies(selected?.site_species ?? selected?.species_list ?? [])
+      })
       .finally(() => { if (!cancelled) setSpeciesLoading(false) })
     return () => { cancelled = true }
-  }, [selected])
+  }, [selectedId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initialise map once ───────────────────────────────────────────────────
   useEffect(() => {
@@ -228,7 +246,7 @@ export default function SitePolygonMap({
         },
       ).addTo(map)
 
-      L.control.zoom({ position: 'bottomright' }).addTo(map)
+      L.control.zoom({ position: 'topleft' }).addTo(map)
       L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map)
 
       // When the map fills a flexible container (height:100%), the pixel size
@@ -536,7 +554,7 @@ export default function SitePolygonMap({
 
         {/* ── Mangrove-area draw tool (editable, single-site detail map) ──── */}
         {editTarget && (
-          <div className="absolute top-3 left-3 z-[500] flex items-center gap-2">
+          <div className="absolute top-3 left-14 z-[500] flex items-center gap-2">
             {drawing ? (
               <div className="flex items-center gap-2 bg-white rounded-xl shadow-md border border-gray-100 px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
@@ -635,29 +653,46 @@ export default function SitePolygonMap({
 
         {/* ── Site detail panel ─────────────────────────────────────────── */}
         {selected && cfg && (
-          <div className="static z-[500] w-auto mx-3 mt-3 mb-3 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in slide-in-from-right-4 duration-200 sm:absolute sm:top-3 sm:right-3 sm:mx-0 sm:mt-0 sm:mb-0 sm:w-72">
-            <div className="px-4 py-3 flex items-start justify-between gap-2" style={{ background: cfg.bg, borderBottom: `3px solid ${cfg.color}` }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: cfg.color }}>
+          <div className="static mx-3 mt-3 mb-3 sm:absolute sm:top-3 sm:right-3 sm:bottom-3 sm:m-0 sm:w-80 z-[500] pointer-events-none flex flex-col justify-start">
+            <div
+              onWheel={e => e.stopPropagation()}
+              onDoubleClick={e => e.stopPropagation()}
+              className="pointer-events-auto w-full max-h-[26rem] sm:max-h-full flex flex-col bg-white/98 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-in slide-in-from-right-4 duration-200"
+            >
+              <div className="px-4 py-3 flex items-start justify-between gap-2 shrink-0" style={{ background: cfg.bg, borderBottom: `3px solid ${cfg.color}` }}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm" style={{ background: cfg.color }}>
                   {(() => { const Icon = STATUS_ICON[selected.status] ?? Sprout; return <Icon className="w-4 h-4 text-white" strokeWidth={2.5} /> })()}
                 </span>
                 <div className="min-w-0">
                   <p className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{selected.name}</p>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full text-white mt-1" style={{ background: cfg.color }}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
-                    {cfg.label}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ background: cfg.color }}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
+                      {cfg.label}
+                    </span>
+                    {selected.established_year != null && (
+                      <span className="text-[10px] font-semibold text-gray-600 bg-white/80 border border-gray-200/80 px-2 py-0.5 rounded-full">
+                        Est. {selected.established_year}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <button onClick={() => setSelected(null)} className="shrink-0 p-1 rounded-lg hover:bg-black/10 transition-colors">
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label="Close site details"
+                className="shrink-0 p-1 rounded-lg hover:bg-black/10 transition-colors"
+              >
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-3.5 space-y-2.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {selected.barangay && (
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <MapPin className="w-4 h-4 text-primary-500 shrink-0" />
+                <div className="flex items-center gap-2 text-xs text-gray-700">
+                  <MapPin className="w-3.5 h-3.5 text-primary-500 shrink-0" />
                   <span className="font-semibold">Brgy. {selected.barangay}, Gloria, Oriental Mindoro</span>
                 </div>
               )}
@@ -677,39 +712,39 @@ export default function SitePolygonMap({
 
               <div className="grid grid-cols-2 gap-2">
                 {selected.area_hectares != null && (
-                  <div className="bg-green-50 rounded-xl p-2.5 border border-green-100">
+                  <div className="bg-green-50 rounded-xl p-2 border border-green-100">
                     <div className="flex items-center gap-1 mb-0.5">
                       <Leaf className="w-3 h-3 text-green-600" />
                       <p className="text-[10px] font-bold text-green-700 uppercase tracking-wide">Area</p>
                     </div>
-                    <p className="text-sm font-extrabold text-green-800">{selected.area_hectares} ha</p>
+                    <p className="text-xs font-extrabold text-green-800">{selected.area_hectares} ha</p>
                   </div>
                 )}
-                <div className="bg-blue-50 rounded-xl p-2.5 border border-blue-100">
+                <div className="bg-blue-50 rounded-xl p-2 border border-blue-100">
                   <div className="flex items-center gap-1 mb-0.5">
                     <Leaf className="w-3 h-3 text-blue-600" />
                     <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Species</p>
                   </div>
-                  <p className="text-sm font-extrabold text-blue-800">
-                    {(species?.length ?? selected.species_list_count ?? 0)}
+                  <p className="text-xs font-extrabold text-blue-800">
+                    {(species?.length ?? selected.site_species?.length ?? selected.species_list_count ?? selected.species_list?.length ?? 0)}
                   </p>
                 </div>
                 {!publicMode && selected.plantation_count != null && (
-                  <div className="bg-emerald-50 rounded-xl p-2.5 border border-emerald-100">
+                  <div className="bg-emerald-50 rounded-xl p-2 border border-emerald-100">
                     <div className="flex items-center gap-1 mb-0.5">
                       <TreePine className="w-3 h-3 text-emerald-600" />
                       <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Planted</p>
                     </div>
-                    <p className="text-sm font-extrabold text-emerald-800">{selected.plantation_count.toLocaleString()}</p>
+                    <p className="text-xs font-extrabold text-emerald-800">{selected.plantation_count.toLocaleString()}</p>
                   </div>
                 )}
                 {!publicMode && selected.survival_rate != null && (
-                  <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                  <div className="bg-gray-50 rounded-xl p-2 border border-gray-100">
                     <div className="flex items-center gap-1 mb-0.5">
                       <BarChart2 className="w-3 h-3 text-gray-600" />
                       <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wide">Survival</p>
                     </div>
-                    <p className="text-sm font-extrabold" style={{ color: selected.survival_rate >= 70 ? '#15803d' : selected.survival_rate >= 40 ? '#b45309' : '#b91c1c' }}>
+                    <p className="text-xs font-extrabold" style={{ color: selected.survival_rate >= 70 ? '#15803d' : selected.survival_rate >= 40 ? '#b45309' : '#b91c1c' }}>
                       {selected.survival_rate}%
                     </p>
                   </div>
@@ -718,26 +753,24 @@ export default function SitePolygonMap({
               {/* Planted vs unplanted area */}
               {selected.planted_hectares != null && selected.area_hectares != null ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-emerald-50 rounded-xl p-2.5 border border-emerald-100">
+                  <div className="bg-emerald-50 rounded-xl p-2 border border-emerald-100">
                     <div className="flex items-center gap-1 mb-0.5">
                       <Sprout className="w-3 h-3 text-emerald-600" />
-                      <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Planted</p>
+                      <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Planted Area</p>
                     </div>
-                    <p className="text-sm font-extrabold text-emerald-800">{selected.planted_hectares} ha</p>
+                    <p className="text-xs font-extrabold text-emerald-800">{selected.planted_hectares} ha</p>
                   </div>
-                  <div className="bg-amber-50 rounded-xl p-2.5 border border-amber-100">
+                  <div className="bg-amber-50 rounded-xl p-2 border border-amber-100">
                     <div className="flex items-center gap-1 mb-0.5">
                       <Leaf className="w-3 h-3 text-amber-600" />
                       <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Unplanted</p>
                     </div>
-                    <p className="text-sm font-extrabold text-amber-800">
+                    <p className="text-xs font-extrabold text-amber-800">
                       {Math.max(0, +(selected.area_hectares - selected.planted_hectares).toFixed(4))} ha
                     </p>
                   </div>
                 </div>
-              ) : (
-                <p className="text-[11px] text-gray-400 italic">Planted/unplanted area breakdown unavailable.</p>
-              )}
+              ) : null}
 
               {/* Mangrove species documented at this site */}
               <div>
@@ -747,7 +780,7 @@ export default function SitePolygonMap({
                   {speciesLoading && <Loader2 className="w-3 h-3 text-gray-300 animate-spin" />}
                 </p>
                 {species && species.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {species.map(sp => (
                       <span key={sp.id}
                         title={sp.local_name ? `${sp.scientific_name} · ${sp.local_name}` : sp.scientific_name}
@@ -766,15 +799,16 @@ export default function SitePolygonMap({
               </div>
 
               {selected.description && (
-                <p className="text-xs text-gray-500 leading-relaxed bg-gray-50 rounded-xl p-3 border border-gray-100">
-                  {selected.description.length > 140 ? selected.description.slice(0, 140) + '…' : selected.description}
+                <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                  {selected.description}
                 </p>
               )}
               {publicMode && (
-                <div className="bg-primary-50 rounded-xl p-3 border border-primary-100 text-center">
+                <div className="bg-primary-50 rounded-xl p-2.5 border border-primary-100 text-center">
                   <p className="text-xs text-primary-700 font-medium">Sign in to view plantation records, survival rates, and full monitoring data.</p>
                 </div>
               )}
+            </div>
             </div>
           </div>
         )}

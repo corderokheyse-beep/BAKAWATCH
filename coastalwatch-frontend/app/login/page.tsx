@@ -35,6 +35,8 @@ export default function LoginPage() {
       role === 'menro'        ? '/menro/dashboard' :
       role === 'field_worker' ? '/field/dashboard' :
       role === 'volunteer'    ? '/volunteer/dashboard' :
+      role === 'denr'         ? '/denr/dashboard' :
+      role === 'evaluator'    ? '/evaluator/dashboard' :
       '/dashboard'
     router.push(dest)
   }

@@ -44,8 +44,12 @@ const PLANTATION_STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: s
 export default function SiteDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const siteId = Number(id)
+  const userRole = user?.role
+  const canReadSiteData = Boolean(
+    userRole && ['menro', 'admin', 'staff', 'field_worker', 'denr', 'evaluator'].includes(userRole)
+  )
 
   const [site, setSite]               = useState<RestorationSite | null>(null)
   const [plantations, setPlantations] = useState<PlantationRecord[]>([])
@@ -95,20 +99,24 @@ export default function SiteDetailPage() {
   const [savingSpecies, setSavingSpecies] = useState(false)
 
   useEffect(() => {
-    if (user?.role === 'field_worker') {
+    if (authLoading) return
+    if (userRole === 'field_worker') {
       router.replace('/analytics')
       return
     }
     setSite(null)
+    setPlantations([])
+    setPhotos([])
     setSiteLoadError(null)
     setLoading(true)
-    // Fetch site first — it's public. Secondary data (plantation records, photos,
-    // ecosystem) requires auth and may 403 for some roles; use allSettled so a
-    // failure on any secondary call never prevents the site from rendering.
+    // Fetch site first — it's public. Secondary data (plantation records, photos)
+    // requires role:menro,admin,staff,field_worker,denr,evaluator; only request
+    // them when the signed-in user holds one of those roles so public/volunteer/
+    // community users never trigger 401/403 responses.
     Promise.allSettled([
       fetchSite(siteId),
-      fetchSitePlantationRecords(siteId),
-      fetchSitePhotos(siteId),
+      canReadSiteData ? fetchSitePlantationRecords(siteId) : Promise.resolve([] as PlantationRecord[]),
+      canReadSiteData ? fetchSitePhotos(siteId) : Promise.resolve([] as SitePhoto[]),
     ]).then(([s, p, ph]) => {
       if (s.status === 'fulfilled') {
         setSite(s.value)
@@ -120,7 +128,7 @@ export default function SiteDetailPage() {
       if (p.status  === 'fulfilled') setPlantations(p.value)
       if (ph.status === 'fulfilled') setPhotos(ph.value)
     }).finally(() => setLoading(false))
-  }, [siteId, user, router])
+  }, [siteId, authLoading, userRole, canReadSiteData, router])
 
   const canAddUpdate = user?.role === 'menro'
   // Site editing is allowed for menro, admin, and staff — matching the backend
@@ -342,11 +350,15 @@ export default function SiteDetailPage() {
 
   const cfg = STATUS_CONFIG[site.status] ?? STATUS_CONFIG.active
 
-  const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'overview',    label: 'Overview' },
-    { key: 'plantations', label: 'Plantation Records', count: plantations.length },
-    { key: 'photos',      label: 'Photos',             count: photos.length },
-  ]
+  const tabs: { key: Tab; label: string; count?: number }[] = canReadSiteData
+    ? [
+        { key: 'overview',    label: 'Overview' },
+        { key: 'plantations', label: 'Plantation Records', count: plantations.length },
+        { key: 'photos',      label: 'Photos',             count: photos.length },
+      ]
+    : [
+        { key: 'overview',    label: 'Overview' },
+      ]
 
   return (
     <SidebarLayout>
@@ -486,7 +498,7 @@ export default function SiteDetailPage() {
               </div>
               <SitePolygonMap
                 sites={[site]}
-                height="clamp(320px, 42vh, 460px)"
+                height="clamp(380px, 48vh, 520px)"
                 selectedSiteId={site.id}
                 editable={canAssign}
                 onBoundarySaved={async () => { setSite(await fetchSite(site.id)) }}

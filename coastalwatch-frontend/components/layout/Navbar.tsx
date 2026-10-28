@@ -48,6 +48,8 @@ export default function Navbar() {
             user.role === 'menro'        ? '/menro/dashboard' :
             user.role === 'field_worker' ? '/field/dashboard' :
             user.role === 'volunteer'    ? '/volunteer/dashboard' :
+            user.role === 'denr'         ? '/denr/dashboard' :
+            user.role === 'evaluator'    ? '/evaluator/dashboard' :
             '/dashboard'
           ) : '/'} className="flex items-center gap-2.5 shrink-0 group">
             <BakawatchLogo size={32} />

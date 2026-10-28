@@ -7,28 +7,29 @@ import {
   signOut,
   type UserCredential,
 } from 'firebase/auth'
-import { firebaseAuth } from './firebase'
+import { getFirebaseAuth, hasInitializedFirebaseAuth } from './firebase'
 
 /** Sign in with Firebase and return a fresh ID token. */
 export async function firebaseSignIn(email: string, password: string): Promise<string> {
-  const cred: UserCredential = await signInWithEmailAndPassword(firebaseAuth, email.trim(), password)
+  const cred: UserCredential = await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
   return cred.user.getIdToken()
 }
 
 /** Create a Firebase account and return a fresh ID token. */
 export async function firebaseRegister(email: string, password: string): Promise<string> {
-  const cred: UserCredential = await createUserWithEmailAndPassword(firebaseAuth, email.trim(), password)
+  const cred: UserCredential = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
   return cred.user.getIdToken()
 }
 
 /** Send a Firebase password-reset email. Firebase owns the whole reset flow. */
 export async function firebaseSendReset(email: string): Promise<void> {
-  await sendPasswordResetEmail(firebaseAuth, email.trim())
+  await sendPasswordResetEmail(getFirebaseAuth(), email.trim())
 }
 
 /** Sign out of Firebase (best-effort; local session is cleared separately). */
 export async function firebaseSignOut(): Promise<void> {
-  try { await signOut(firebaseAuth) } catch { /* non-blocking */ }
+  if (!hasInitializedFirebaseAuth()) return
+  try { await signOut(getFirebaseAuth()) } catch { /* non-blocking */ }
 }
 
 /** Map Firebase auth error codes to user-friendly messages. */

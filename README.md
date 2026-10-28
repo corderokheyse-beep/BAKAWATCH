@@ -138,6 +138,7 @@ Important API settings include:
 | `ML_SERVICE_URL` | URL of the FastAPI classifier. |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Preferred image upload storage credentials. |
 | `FILESYSTEM_DISK=s3`, `AWS_BUCKET`, `AWS_DEFAULT_REGION`, and AWS credentials (or an instance role) | Optional durable S3-compatible image storage when Cloudinary is not configured. Set `AWS_URL` when images are served through a CDN or custom public endpoint. |
+| `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | Optional coordinates for the Field Worker and Volunteer dashboard weather forecast. Defaults to the Gloria coordinates provided for the forecast location. Weather is sourced from Open-Meteo and cached for 30 minutes. |
 | `MAIL_*` | Production email provider settings for account and notification email. |
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CREDENTIALS` | Optional Firebase integration. Keep its service account key outside the repository. |
 
@@ -153,7 +154,8 @@ A practical hosted layout is:
 4. Deploy `ml-service/` as a separate Python web service if species detection is required.
 5. Configure Cloudinary for user uploads, or select and configure the S3 filesystem disk (`FILESYSTEM_DISK=s3`, bucket, region, and credentials or an instance role). Ensure the bucket/CDN serves uploaded images publicly. Local-disk uploads are limited to local development and tests; hosted environments reject uploads when no durable storage is configured rather than returning URLs that will break after a restart or deployment.
 6. Set `NEXT_PUBLIC_API_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ML_SERVICE_URL`, and email settings to the production service URLs.
-7. Run database migrations during deployment with `php artisan migrate --force`. Seeders create sample users and data; review them and do not run them against production without removing or changing their default credentials.
+7. The Field Worker and Volunteer dashboards show a five-day weather forecast from Open-Meteo at the configured Gloria coordinates. No API key is required. The free API is intended for non-commercial use; review Open-Meteo's current terms and attribution requirements before production use.
+8. Run database migrations during deployment with `php artisan migrate --force`. Seeders create sample users and data; review them and do not run them against production without removing or changing their default credentials.
 
 If Render Shell is unavailable, you can run the starter data seeders during an API deploy. Set `ADMIN_EMAIL` to the intended administrator's Firebase sign-in email and set `ADMIN_PASSWORD` to a strong, unique secret in the Render service environment. Then set `RUN_STARTER_SITES_SEEDER=true` and save. The entrypoint runs migrations, `ProductionSeeder` (which provisions the admin), `StarterSitesSeeder`, and `StarterOperationalDataSeeder`. The operational seeder adds clearly labeled sample inventory entries, planting events, reports, and published tips/guides so each dashboard has example content; these are demonstration records, not verified field activity or official schedules. All seeders are safe to rerun without duplicating these records. The admin can sign in with the Firebase password for that email; the local `ADMIN_PASSWORD` is not the Firebase password. Remove `RUN_STARTER_SITES_SEEDER` or set it to `false` after the seeder completes, then save/restart. Do not share or commit the admin secret. Sample site coordinates and boundaries are representative, not verified survey data.
 

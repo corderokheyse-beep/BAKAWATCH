@@ -111,7 +111,7 @@ Route::middleware('optional.auth')->get('/reports', [ReportController::class, 'i
 
 // ── Static /reports/* sub-routes MUST be declared before the dynamic {report} wildcard ──
 // Authenticated: instant ML image analysis
-Route::middleware(['auth:sanctum', 'role:field_worker,volunteer,menro,staff,admin'])
+Route::middleware(['auth:sanctum', 'role:field_worker,volunteer,user,menro,staff,admin'])
     ->post('/reports/analyze-image', [ReportController::class, 'analyzeImage']);
 
 // Authenticated: mangrove report generation (menro/staff/admin)
@@ -136,7 +136,7 @@ Route::get('/projects/{restorationProject}', [RestorationProjectController::clas
 
 // ─── Authenticated Routes ─────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
-    Route::middleware('role:field_worker,volunteer')
+    Route::middleware('role:field_worker,volunteer,user')
         ->get('/weather', WeatherForecastController::class);
 
     Route::middleware('role:field_worker')->group(function () {
@@ -178,7 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Monitoring follow-up updates: open to field workers + volunteers (own
     // reports only — ownership enforced in the controller) as well as MENRO/staff.
-    Route::middleware('role:admin,staff,menro,field_worker,volunteer')
+    Route::middleware('role:admin,staff,menro,field_worker,volunteer,user')
         ->post('/reports/{report}/updates', [ReportController::class, 'addUpdate']);
 
     // ─── Staff / Admin / MENRO Routes ──────────────────────────────────────────
@@ -273,10 +273,10 @@ Route::post('/events/{plantingEvent}/register-public', [PlantingEventController:
 Route::middleware('optional.auth')->post('/event-requests', [PlantationEventRequestController::class, 'store']);
 Route::get('/event-requests/pending-count',  [PlantationEventRequestController::class, 'pendingCount']);
 
-// Authenticated field worker / volunteer
+// Authenticated field worker / volunteer / community participant
 Route::middleware('auth:sanctum')->group(function () {
-    // field_worker + volunteer can register for and cancel event registrations
-    Route::middleware('role:field_worker,volunteer')->group(function () {
+    // field_worker + volunteer + user can register for and cancel event registrations
+    Route::middleware('role:field_worker,volunteer,user')->group(function () {
         Route::post('/events/{plantingEvent}/register', [PlantingEventController::class, 'register']);
         Route::delete('/events/{plantingEvent}/unregister', [PlantingEventController::class, 'unregister']);
     });
@@ -286,14 +286,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Any authenticated user can fetch their own event requests
     Route::get('/event-requests/mine', [PlantationEventRequestController::class, 'mine']);
-    Route::middleware('role:volunteer')->group(function () {
+    Route::middleware('role:volunteer,user')->group(function () {
         Route::put('/event-requests/{plantationEventRequest}', [PlantationEventRequestController::class, 'update']);
         Route::post('/event-requests/{plantationEventRequest}/cancel', [PlantationEventRequestController::class, 'cancelMine']);
     });
 
     // field_worker (and menro/admin/staff) can submit plantation records
-    // volunteer can view their own (in case they were previously field_worker or for display)
-    Route::middleware('role:field_worker,menro,admin,staff,volunteer')->group(function () {
+    // volunteer/user can view their own (in case they were previously field_worker or for display)
+    Route::middleware('role:field_worker,menro,admin,staff,volunteer,user')->group(function () {
         Route::get('/plantation-records/mine', [PlantationRecordController::class, 'mine']);
         Route::get('/monitoring-records/mine', [MonitoringRecordController::class, 'mine']);
     });
@@ -308,17 +308,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ecosystem-records', [EcosystemRecordController::class, 'store']);
     });
 
-    // Site data reads — MENRO/admin/staff/field_worker plus DENR + research
-    // evaluators (read-only authorized review).
-    Route::middleware('role:menro,admin,staff,field_worker,denr,evaluator')->group(function () {
+    // Site data reads — MENRO/admin/staff/field_worker plus DENR, research
+    // evaluators, and signed-in participants (volunteer/user) for read-only site view.
+    Route::middleware('role:menro,admin,staff,field_worker,denr,evaluator,volunteer,user')->group(function () {
         Route::get('/sites/{restorationSite}/plantation-records', [PlantationRecordController::class, 'bySite']);
-        Route::get('/sites/{restorationSite}/monitoring-records', [MonitoringRecordController::class, 'bySite']);
-        Route::get('/sites/{restorationSite}/ecosystem-records', [EcosystemRecordController::class, 'bySite']);
         Route::get('/sites/{restorationSite}/photos', [SitePhotoController::class, 'index']);
     });
 
-    // Analytics reads — MENRO/admin/staff plus DENR + research evaluators.
-    Route::middleware('role:menro,admin,staff,denr,evaluator,field_worker,volunteer')->group(function () {
+    Route::middleware('role:menro,admin,staff,field_worker,denr,evaluator')->group(function () {
+        Route::get('/sites/{restorationSite}/monitoring-records', [MonitoringRecordController::class, 'bySite']);
+        Route::get('/sites/{restorationSite}/ecosystem-records', [EcosystemRecordController::class, 'bySite']);
+    });
+
+    // Analytics reads — MENRO/admin/staff plus DENR + research evaluators + participants.
+    Route::middleware('role:menro,admin,staff,denr,evaluator,field_worker,volunteer,user')->group(function () {
         Route::get('/analytics/{restorationSite}', [AnalyticsController::class, 'show']);
         Route::get('/analytics/{restorationSite}/predict-growth', [AnalyticsController::class, 'predictGrowth']);
     });
