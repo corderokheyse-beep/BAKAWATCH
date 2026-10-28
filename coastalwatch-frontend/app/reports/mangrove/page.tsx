@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, resolveImageUrl, getReportPhotoUrls } from '@/lib/utils'
 import type { RestorationSite, GeneratedReport, Report, ReportType, ReportStatus, PaginatedResponse } from '@/lib/types'
 import {
   FileText, AlertTriangle, CheckCircle, XCircle, Clock,
@@ -85,7 +85,8 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
 // Returns null on failure so a missing/blocked image never breaks the PDF.
 async function imageToDataUrl(url: string): Promise<{ data: string; fmt: string } | null> {
   try {
-    const res = await fetch(url, { mode: 'cors' })
+    const resolved = resolveImageUrl(url) ?? url
+    const res = await fetch(resolved, { mode: 'cors' })
     if (!res.ok) return null
     const blob = await res.blob()
     const fmt = blob.type.includes('png') ? 'PNG' : 'JPEG'
@@ -1124,13 +1125,13 @@ export default function MangroveReportsPage() {
                                 <div className="grid grid-cols-2 gap-3">
                                   <figure className="rounded-lg border border-gray-200 overflow-hidden">
                                     <div className="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
-                                      {c.before_photo ? <img src={c.before_photo} alt="before" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-400">No photo</span>}
+                                      {resolveImageUrl(c.before_photo) ? <img src={resolveImageUrl(c.before_photo)!} alt="before" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-400">No photo</span>}
                                     </div>
                                     <figcaption className="px-2 py-1 text-[10px] font-bold text-blue-600 uppercase">Before · {c.date_reported}</figcaption>
                                   </figure>
                                   <figure className="rounded-lg border border-gray-200 overflow-hidden">
                                     <div className="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
-                                      {c.after_photo ? <img src={c.after_photo} alt="after" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-400">No follow-up photo</span>}
+                                      {resolveImageUrl(c.after_photo) ? <img src={resolveImageUrl(c.after_photo)!} alt="after" className="w-full h-full object-cover" /> : <span className="text-[10px] text-gray-400">No follow-up photo</span>}
                                     </div>
                                     <figcaption className="px-2 py-1 text-[10px] font-bold text-green-600 uppercase">Latest monitoring</figcaption>
                                   </figure>
@@ -1551,13 +1552,20 @@ export default function MangroveReportsPage() {
                                         <p className="text-sm"><strong>Species:</strong> {r.event_accomplishment.species_name} · <strong>Seedlings planted:</strong> {r.event_accomplishment.seedlings_planted} · <strong>Volunteers present:</strong> {r.event_accomplishment.volunteers_present}</p>
                                         <p className="text-sm"><strong>Submitted:</strong> {formatDate(r.event_accomplishment.submitted_at)} · <strong>Location:</strong> {r.event_accomplishment.latitude ?? '—'}, {r.event_accomplishment.longitude ?? '—'}</p>
                                         {r.event_accomplishment.remarks && <p className="text-sm"><strong>Observation / Remarks:</strong> {r.event_accomplishment.remarks}</p>}
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{r.event_accomplishment.photos.map((photo, i) => <img key={i} src={photo.url} alt={`Accomplishment photo ${i + 1}`} className="aspect-square w-full rounded-lg object-cover" />)}</div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{r.event_accomplishment.photos.map((photo, i) => {
+                                          const pUrl = resolveImageUrl(photo.url)
+                                          return pUrl ? <img key={i} src={pUrl} alt={`Accomplishment photo ${i + 1}`} className="aspect-square w-full rounded-lg object-cover" /> : null
+                                        })}</div>
                                       </div>
                                     )}
-                                    {r.image_url && (
+                                    {getReportPhotoUrls(r).length > 0 && (
                                       <div>
                                         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Photo</p>
-                                        <img src={r.image_url} alt="Report" className="rounded-xl max-h-40 object-cover border border-gray-200" />
+                                        <div className="flex flex-wrap gap-2">
+                                          {getReportPhotoUrls(r).map((url, idx) => (
+                                            <img key={url} src={url} alt={`Report photo ${idx + 1}`} className="rounded-xl max-h-40 object-cover border border-gray-200" />
+                                          ))}
+                                        </div>
                                       </div>
                                     )}
                                     {canReviewThreats && <div className="flex flex-wrap gap-2 md:col-span-2">

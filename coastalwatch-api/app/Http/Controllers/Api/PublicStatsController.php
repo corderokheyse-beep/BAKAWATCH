@@ -30,10 +30,11 @@ class PublicStatsController extends Controller
             $speciesReference = MangroveSpecies::where('is_active', true)->count();
             $speciesMonitored = max($speciesRecorded, $speciesReference);
 
-            // Trees planted: field plantation records + project tallies.
+            // Trees planted: field plantation records + seedling inventory planted + project tallies.
             $plantationRecords = PlantationRecord::count();
+            $inventoryPlanted  = (int) \App\Models\SeedlingInventory::sum('quantity_planted');
             $projectTrees      = (int) RestorationProject::sum('trees_planted');
-            $treesPlanted      = $plantationRecords + $projectTrees;
+            $treesPlanted      = max($plantationRecords, $inventoryPlanted) + $projectTrees;
 
             // Total protected area from real site areas (hectares, 1 dp).
             $protectedArea = round((float) RestorationSite::sum('area_hectares'), 1);
@@ -54,13 +55,16 @@ class PublicStatsController extends Controller
             $alive        = (int) ($row->alive ?? 0);
             $survivalRate = $monitored > 0 ? round($alive * 100.0 / $monitored, 0) : null;
 
+            $activeProjects = RestorationProject::where('status', 'active')->count();
+            $activeSites    = RestorationSite::where('status', 'active')->count();
+
             return [
                 'restoration_sites' => $sites,
                 'species_monitored' => $speciesMonitored,
                 'trees_planted'     => $treesPlanted,
                 'protected_area_ha' => $protectedArea,
                 'survival_rate'     => $survivalRate,   // null when no monitoring data yet
-                'active_projects'   => RestorationProject::where('status', 'active')->count(),
+                'active_projects'   => $activeProjects > 0 ? $activeProjects : $activeSites,
             ];
         });
 

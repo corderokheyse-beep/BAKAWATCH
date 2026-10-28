@@ -63,11 +63,13 @@ trait ResolvesLocalUploadUrls
                     }
                 }
 
-                if (
-                    $path === null
-                    && (str_starts_with($relativePath, 'reports/') || str_starts_with($relativePath, 'report-updates/'))
-                ) {
-                    $path = $relativePath;
+                if ($path === null) {
+                    foreach (['reports/', 'report-updates/', 'event-accomplishments/', 'plantation-records/', 'monitoring-records/', 'site-photos/', 'coastalwatch/'] as $folderPrefix) {
+                        if (str_starts_with($relativePath, $folderPrefix)) {
+                            $path = $relativePath;
+                            break;
+                        }
+                    }
                 }
             }
         }

@@ -9,7 +9,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import type { Report } from '@/lib/types'
-import { formatDate, CATEGORY_ICONS } from '@/lib/utils'
+import { formatDate, CATEGORY_ICONS, getReportPhotoUrls } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { MapPin, Calendar, User, ArrowLeft, CheckCircle, XCircle, Leaf, Loader2, RefreshCw, Maximize2, X, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -123,9 +123,7 @@ export default function ReportDetailPage() {
 
   // Owner may add/replace the photo while the report is still pending; staff always may.
   const canEditPhoto = isStaff || (user?.id === report.user_id && report.status === 'pending')
-  const reportPhotoUrls = report.photos?.length
-    ? report.photos.map(photo => photo.url)
-    : report.image_url ? [report.image_url] : []
+  const reportPhotoUrls = getReportPhotoUrls(report)
 
   return (
     <SidebarLayout>

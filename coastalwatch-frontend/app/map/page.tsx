@@ -157,6 +157,7 @@ function MapPageInner() {
   const [showTimeline, setShowTimeline]     = useState(false)
   const [activePhotoIdx, setActivePhotoIdx] = useState(0)
   const [lightboxUrl, setLightboxUrl]       = useState<string | null>(null)
+  const [failedPhotoUrls, setFailedPhotoUrls] = useState<Record<string, boolean>>({})
 
   // Legend starts expanded on desktop, collapsed to a compact pill on phones
   // where the full card would cover most of the map. `null` = not determined
@@ -220,9 +221,7 @@ function MapPageInner() {
     if (!focusReportId || reports.length === 0) return
     const target = reports.find(r => r.id === focusReportId)
     if (target) {
-      setSelectedReport(target)
-      setSelectedSite(null)
-      setPanelMode('report')
+      handleReportClick(target)
     }
   }, [focusReportId, reports]) // eslint-disable-line
 
@@ -302,7 +301,7 @@ function MapPageInner() {
     setShowTimeline(false)
   }
 
-  const selectedReportPhotoUrls = getReportPhotoUrls(selectedReport)
+  const selectedReportPhotoUrls = getReportPhotoUrls(selectedReport).filter(url => !failedPhotoUrls[url])
 
   return (
     <SidebarLayout>
@@ -592,12 +591,22 @@ function MapPageInner() {
                 {selectedReportPhotoUrls.length > 0 && (
                   <div className={`grid gap-1 ${selectedReportPhotoUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     {selectedReportPhotoUrls.map((url, index) => (
-                      <img
+                      <button
                         key={url}
-                        src={url}
-                        alt={`${selectedReport.title} photo ${index + 1}`}
-                        className="aspect-[4/3] w-full bg-gray-100 object-cover"
-                      />
+                        type="button"
+                        onClick={() => setLightboxUrl(url)}
+                        className="relative aspect-[4/3] w-full bg-gray-100 overflow-hidden group cursor-zoom-in"
+                      >
+                        <img
+                          src={url}
+                          alt={`${selectedReport.title} photo ${index + 1}`}
+                          className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={() => setFailedPhotoUrls(prev => ({ ...prev, [url]: true }))}
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-white bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Maximize2 className="w-2.5 h-2.5" /> Zoom
+                        </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -880,6 +889,29 @@ function MapPageInner() {
             </div>{/* ── end single scroll region ── */}
           </div>
         </div>
+
+        {/* Lightbox modal */}
+        {lightboxUrl && (
+          <div
+            className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <button
+              type="button"
+              onClick={() => setLightboxUrl(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              aria-label="Close photo preview"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={lightboxUrl}
+              alt="Full size report photo"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+        )}
       </div>
     </SidebarLayout>
   )

@@ -59,8 +59,12 @@ class ReportController extends Controller
     public function mapData(Request $request): JsonResponse
     {
         $query = Report::query()
+            ->with([
+                'updates:id,report_id,image_url,image_public_id,photos,update_date,created_at',
+                'eventAccomplishment:id,report_id,photos,species_name,seedlings_planted,volunteers_present',
+            ])
             ->select([
-                'id', 'title', 'description', 'latitude', 'longitude', 'location_name',
+                'id', 'user_id', 'title', 'description', 'latitude', 'longitude', 'location_name',
                 'status', 'category', 'severity', 'affected_radius_m', 'image_url', 'image_public_id',
                 'photos', 'report_type', 'admin_notes', 'created_at',
             ])
@@ -68,14 +72,22 @@ class ReportController extends Controller
             ->when($request->category, fn($q) => $q->where('category', $request->category));
 
         // Reviewers (menro/admin/staff) can see every report on the map so they
-        // can track pending threats. Everyone else sees approved reports only.
+        // can track pending threats. Authenticated users see resolved reports
+        // plus their own submitted reports; guests see resolved reports only.
         $user = auth()->user();
-        if (! $user || ! in_array($user->role, ['admin', 'staff', 'menro'], true)) {
+        if (! $user) {
             $query->approved();
+        } elseif (! in_array($user->role, ['admin', 'staff', 'menro'], true)) {
+            $query->where(function ($q) use ($user) {
+                $q->approved()->orWhere('user_id', $user->id);
+            });
         }
 
         $reports = $query->latest()->get();
-        $reports->each(fn (Report $report) => $report->makeHidden('image_public_id'));
+        $reports->each(function (Report $report) {
+            $report->makeHidden('image_public_id');
+            $report->updates?->each->makeHidden('image_public_id');
+        });
 
         return response()->json($reports);
     }
@@ -209,7 +221,14 @@ class ReportController extends Controller
             return response()->json(['message' => 'Not found.'], 404);
         }
 
-        return response()->json($report->load(['user:id,name,email', 'reviewer:id,name']));
+        return response()->json($report->load([
+            'user:id,name,email',
+            'reviewer:id,name',
+            'updates.updater:id,name',
+            'eventAccomplishment.event:id,name,scheduled_at',
+            'eventAccomplishment.site:id,name',
+            'eventAccomplishment.species:id,scientific_name,local_name',
+        ]));
     }
 
     public function update(Request $request, Report $report): JsonResponse
@@ -585,7 +604,14 @@ class ReportController extends Controller
      */
     public function adminShow(Report $report): JsonResponse
     {
-        return response()->json($report->load(['user:id,name,email', 'reviewer:id,name']));
+        return response()->json($report->load([
+            'user:id,name,email',
+            'reviewer:id,name',
+            'updates.updater:id,name',
+            'eventAccomplishment.event:id,name,scheduled_at',
+            'eventAccomplishment.site:id,name',
+            'eventAccomplishment.species:id,scientific_name,local_name',
+        ]));
     }
 
     /**

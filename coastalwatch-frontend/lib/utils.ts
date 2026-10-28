@@ -64,38 +64,49 @@ export function resolveImageUrl(url?: string | null): string {
   const trimmed = url.trim()
   if (!trimmed) return ''
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
-  let apiOrigin = ''
+  const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').trim()
+  let apiRoot = ''
   try {
     if (apiBase) {
       const parsedApi = new URL(apiBase, typeof window !== 'undefined' ? window.location.href : 'http://127.0.0.1:8000')
-      apiOrigin = parsedApi.origin
+      apiRoot = `${parsedApi.origin}${parsedApi.pathname}`.replace(/\/api\/?$/, '').replace(/\/+$/, '')
     } else if (typeof window !== 'undefined') {
-      apiOrigin = window.location.origin
+      apiRoot = window.location.origin
     }
   } catch {
-    apiOrigin = ''
+    apiRoot = ''
+  }
+
+  const normalizeUploadSubpath = (rawPath: string): string | null => {
+    const clean = rawPath.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
+    for (const prefix of ['api/uploads/', 'storage/app/public/', 'storage/']) {
+      const idx = clean.indexOf(prefix)
+      if (idx !== -1) {
+        return clean.substring(idx + prefix.length).replace(/^\/+/, '')
+      }
+    }
+    for (const folder of ['reports/', 'report-updates/', 'event-accomplishments/', 'plantation-records/', 'monitoring-records/', 'site-photos/', 'coastalwatch/']) {
+      if (clean.startsWith(folder)) {
+        return clean
+      }
+    }
+    return null
   }
 
   // Already absolute or protocol-relative or data/blob
   if (/^(https?:|\/\/|data:|blob:)/i.test(trimmed)) {
+    if (/^(data:|blob:)/i.test(trimmed)) return trimmed
     try {
-      const parsedImg = new URL(trimmed)
-      const isUpload = parsedImg.pathname.includes('/api/uploads/') || parsedImg.pathname.includes('/storage/')
-
-      if (isUpload && apiOrigin) {
-        // Upgrade insecure http to https if the page is served over https
-        if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsedImg.protocol === 'http:') {
-          return `${apiOrigin}${parsedImg.pathname}${parsedImg.search}`
-        }
-
-        // If the URL is bound to localhost or 127.0.0.1 and the current API host differs:
-        if ((parsedImg.hostname === 'localhost' || parsedImg.hostname === '127.0.0.1') && apiOrigin) {
-          const parsedApi = new URL(apiBase, 'http://127.0.0.1:8000')
-          if (parsedApi.hostname !== parsedImg.hostname) {
-            return `${apiOrigin}${parsedImg.pathname}${parsedImg.search}`
-          }
-        }
+      const parsedImg = new URL(trimmed, typeof window !== 'undefined' ? window.location.href : 'https://localhost')
+      const uploadSubpath = normalizeUploadSubpath(parsedImg.pathname)
+      if (uploadSubpath) {
+        return apiRoot
+          ? `${apiRoot}/api/uploads/${uploadSubpath}${parsedImg.search}`
+          : `/api/uploads/${uploadSubpath}${parsedImg.search}`
+      }
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && parsedImg.protocol === 'http:') {
+        parsedImg.protocol = 'https:'
+        return parsedImg.toString()
       }
     } catch {
       // pass through if URL parsing fails
@@ -104,21 +115,13 @@ export function resolveImageUrl(url?: string | null): string {
   }
 
   // Normalized relative path
-  let path = trimmed.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
-
-  if (path.startsWith('storage/')) {
-    path = path.substring('storage/'.length).replace(/^app\/public\//, '')
-    path = `api/uploads/${path}`
-  } else if (!path.startsWith('api/uploads/')) {
-    path = `api/uploads/${path}`
-  }
-
-  return apiOrigin ? `${apiOrigin}/${path}` : `/${path}`
+  const uploadSubpath = normalizeUploadSubpath(trimmed) ?? trimmed.replace(/\\/g, '/').replace(/^(\.\/|\/)+/, '')
+  return apiRoot ? `${apiRoot}/api/uploads/${uploadSubpath}` : `/api/uploads/${uploadSubpath}`
 }
 
 /**
  * Extracts and resolves all photo URLs from a Report object, including photos array,
- * image_url, and event_accomplishment photos.
+ * image_url, event_accomplishment photos, and monitoring update photos.
  */
 export function getReportPhotoUrls(report?: any | null): string[] {
   if (!report) return []
@@ -145,11 +148,27 @@ export function getReportPhotoUrls(report?: any | null): string[] {
     add(report.image_url)
   }
 
-  // 3. Check event_accomplishment photos
-  if (report.event_accomplishment && Array.isArray(report.event_accomplishment.photos)) {
-    for (const p of report.event_accomplishment.photos) {
+  // 3. Check event_accomplishment photos (snake_case or camelCase)
+  const accomplishment = report.event_accomplishment ?? report.eventAccomplishment
+  if (accomplishment && Array.isArray(accomplishment.photos)) {
+    for (const p of accomplishment.photos) {
       if (typeof p === 'string') add(p)
       else if (p && typeof p.url === 'string') add(p.url)
+    }
+  }
+
+  // 4. If no initial photos exist, fall back to monitoring update photos
+  if (urls.length === 0 && Array.isArray(report.updates)) {
+    for (const u of report.updates) {
+      if (Array.isArray(u?.photos)) {
+        for (const p of u.photos) {
+          if (typeof p === 'string') add(p)
+          else if (p && typeof p.url === 'string') add(p.url)
+        }
+      }
+      if (u?.image_url) {
+        add(u.image_url)
+      }
     }
   }
 

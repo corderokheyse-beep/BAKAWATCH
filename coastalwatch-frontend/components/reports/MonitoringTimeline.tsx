@@ -6,7 +6,7 @@ import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import Badge from '@/components/ui/Badge'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { formatDate, getReportPhotoUrls } from '@/lib/utils'
+import { formatDate, getReportPhotoUrls, resolveImageUrl } from '@/lib/utils'
 import type { Report, ReportUpdate, ReportStatusHistoryEntry } from '@/lib/types'
 import { readJpegGps } from '@/lib/exif-gps'
 import { Plus, Camera, Check, X, Clock, ImageOff, MapPin } from 'lucide-react'
@@ -112,8 +112,10 @@ export default function MonitoringTimeline({ reportId }: { reportId: number; rep
     ...orderedUpdates.map(entry => ({ kind: 'update' as const, entry, at: entry.created_at || entry.update_date })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
   const baselinePhotos = getReportPhotoUrls(data.report)
-  if (baselinePhotos.length === 0 && data.before_photo) {
-    baselinePhotos.push(data.before_photo)
+  const resolvedBeforePhoto = resolveImageUrl(data.before_photo)
+  const resolvedAfterPhoto = resolveImageUrl(data.after_photo)
+  if (baselinePhotos.length === 0 && resolvedBeforePhoto) {
+    baselinePhotos.push(resolvedBeforePhoto)
   }
 
   return <div className="space-y-5">
@@ -143,8 +145,8 @@ export default function MonitoringTimeline({ reportId }: { reportId: number; rep
         </figure>
         <figure className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
           <div className="aspect-video bg-gray-100 flex items-center justify-center overflow-hidden">
-            {data.after_photo
-              ? <img src={data.after_photo} alt="Latest update" className="w-full h-full object-cover" />
+            {resolvedAfterPhoto
+              ? <img src={resolvedAfterPhoto} alt="Latest update" className="w-full h-full object-cover" />
               : <ImageOff className="w-6 h-6 text-gray-300" />}
           </div>
           <figcaption className="px-3 py-2">
@@ -203,9 +205,12 @@ export default function MonitoringTimeline({ reportId }: { reportId: number; rep
           {item.entry.latitude != null && item.entry.longitude != null && <p className="mt-1 inline-flex items-center gap-1 text-xs text-primary-700"><MapPin className="w-3.5 h-3.5" />{item.entry.latitude.toFixed(6)}, {item.entry.longitude.toFixed(6)}</p>}
           <dl className="mt-1 text-xs text-gray-600 space-y-1">{Object.entries(item.entry.fields ?? {}).map(([key, value]) => <div key={key}><dt className="inline font-semibold capitalize">{key.replaceAll('_', ' ')}: </dt><dd className="inline">{String(value)}</dd></div>)}</dl>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-            {data.before_photo && <figure className="rounded-lg overflow-hidden border border-gray-100"><img src={data.before_photo} alt="Day 0 baseline" className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Day 0 baseline</figcaption></figure>}
-            {(item.entry.photos ?? []).map((photo: any, i: number) => <figure key={i} className="rounded-lg overflow-hidden border border-gray-100"><img src={photo.url} alt={`Update photo ${i + 1}`} className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Update photo {i + 1}</figcaption></figure>)}
-            {item.entry.image_url && !item.entry.photos?.length && <figure className="rounded-lg overflow-hidden border border-gray-100"><img src={item.entry.image_url} alt="Update photo" className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Update photo</figcaption></figure>}
+            {resolvedBeforePhoto && <figure className="rounded-lg overflow-hidden border border-gray-100"><img src={resolvedBeforePhoto} alt="Day 0 baseline" className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Day 0 baseline</figcaption></figure>}
+            {(item.entry.photos ?? []).map((photo: any, i: number) => {
+              const photoUrl = resolveImageUrl(photo?.url)
+              return photoUrl ? <figure key={i} className="rounded-lg overflow-hidden border border-gray-100"><img src={photoUrl} alt={`Update photo ${i + 1}`} className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Update photo {i + 1}</figcaption></figure> : null
+            })}
+            {item.entry.image_url && !item.entry.photos?.length && resolveImageUrl(item.entry.image_url) && <figure className="rounded-lg overflow-hidden border border-gray-100"><img src={resolveImageUrl(item.entry.image_url)!} alt="Update photo" className="w-full aspect-square object-cover" /><figcaption className="px-2 py-1 text-[10px] font-semibold text-gray-500">Update photo</figcaption></figure>}
           </div>
         </li>
       ))}

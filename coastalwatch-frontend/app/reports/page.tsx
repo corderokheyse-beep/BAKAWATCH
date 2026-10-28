@@ -10,7 +10,7 @@ import Pagination from '@/components/ui/Pagination'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import type { Report, PaginatedResponse, ReportCategory } from '@/lib/types'
-import { formatDate, CATEGORY_ICONS } from '@/lib/utils'
+import { formatDate, CATEGORY_ICONS, getReportPhotoUrls } from '@/lib/utils'
 import { Search, MapPin, Calendar, Leaf } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -167,12 +167,12 @@ export default function ReportsPage() {
                   href={`/reports/${report.id}`}
                   className="block"
                 >
-                  {report.photos?.[0]?.url || report.image_url ? (
+                  {getReportPhotoUrls(report)[0] ? (
                     <div className="relative h-44 w-full overflow-hidden bg-gray-100">
                       {/* Plain <img> (not next/image) so locally-served API image URLs
                           load directly instead of 400ing through the Next optimizer. */}
                       <img
-                        src={report.photos?.[0]?.url ?? report.image_url}
+                        src={getReportPhotoUrls(report)[0]}
                         alt={report.title}
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />

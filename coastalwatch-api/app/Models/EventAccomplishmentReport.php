@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EventAccomplishmentReport extends Model
 {
+    use \App\Models\Concerns\ResolvesLocalUploadUrls;
+
     protected $fillable = [
         'planting_event_id', 'restoration_site_id', 'user_id', 'mangrove_species_id',
         'species_name', 'seedlings_planted', 'volunteers_present', 'photos',

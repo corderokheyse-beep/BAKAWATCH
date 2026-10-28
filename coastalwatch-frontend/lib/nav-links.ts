@@ -74,6 +74,7 @@ export function getNavLinks(role?: string): NavLink[] {
     case 'volunteer':
       return [
         { href: '/volunteer/dashboard', label: 'Dashboard',       icon: LayoutDashboard },
+        { href: '/map',                 label: 'Live Map',        icon: Map },
         { href: '/events',              label: 'Planting Events',  icon: CalendarDays },
         { href: '/volunteer/requests',  label: 'My Requests',      icon: FileText },
         { href: '/volunteer/joined-events', label: 'Joined Events', icon: CalendarDays },
@@ -104,12 +105,12 @@ export function getNavLinks(role?: string): NavLink[] {
 
     default:
       return [
+        { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard },
         { href: '/map',             label: 'Live Map',      icon: Map },
         { href: '/sites',           label: 'Sites',         icon: Leaf },
         { href: '/events',          label: 'Events',        icon: CalendarDays },
         { href: '/events/request',  label: 'Request Event', icon: TreePine },
         { href: '/articles',        label: 'Tips & Guides', icon: BookOpen },
-        { href: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard },
       ]
   }
 }

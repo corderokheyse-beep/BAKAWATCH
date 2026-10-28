@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { Report, RestorationProject } from '@/lib/types'
-import { CATEGORY_ICONS } from '@/lib/utils'
+import { CATEGORY_ICONS, resolveImageUrl, getReportPhotoUrls } from '@/lib/utils'
 
 interface MapViewProps {
   reports?: Report[]
@@ -108,12 +108,13 @@ export default function MapView({
         })
 
         const marker = L.marker([report.latitude, report.longitude], { icon }).addTo(map)
+        const popupImageUrl = getReportPhotoUrls(report)[0] ?? resolveImageUrl(report.image_url)
         marker.bindPopup(`
           <div style="min-width:180px;font-family:sans-serif">
             <p style="font-weight:600;font-size:13px;margin:0 0 4px">${report.title}</p>
             <p style="font-size:11px;color:#6b7280;margin:0 0 6px">${report.category} · ${report.status}</p>
-            ${report.image_url
-              ? `<img src="${report.image_url}" style="width:100%;height:80px;object-fit:cover;border-radius:6px;margin-bottom:4px"/>`
+            ${popupImageUrl
+              ? `<img src="${popupImageUrl}" onerror="this.style.display='none'" style="width:100%;height:80px;object-fit:cover;border-radius:6px;margin-bottom:4px"/>`
               : ''}
             <p style="font-size:11px;color:#9ca3af;margin:0">${report.location_name ?? ''}</p>
           </div>`)
