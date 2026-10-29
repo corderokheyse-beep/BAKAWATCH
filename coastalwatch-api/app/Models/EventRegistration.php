@@ -9,7 +9,7 @@ class EventRegistration extends Model
     protected $fillable = [
         'planting_event_id', 'user_id',
         'full_name', 'email', 'phone', 'address', 'organization', 'age',
-        'gender', 'group_size', 'admin_notes', 'registration_status',
+        'gender', 'group_size', 'motivation', 'admin_notes', 'registration_status',
     ];
 
     protected $casts = [

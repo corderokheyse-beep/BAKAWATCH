@@ -379,6 +379,7 @@ function EventsPageInner() {
       setPersonalSuccess(true)
       if (status === 'pending_approval') setPendingReg(prev => new Set(prev).add(personalModal.id))
       else setRegistered(prev => new Set(prev).add(personalModal.id))
+      fetchOpenEvents().then(setEvents).catch(() => {})
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'Registration failed.')
     } finally { setPersonalSubmitting(false) }
@@ -403,6 +404,7 @@ function EventsPageInner() {
           await api.delete(`/events/${eventId}/unregister`)
           setRegistered(prev => { const s = new Set(prev); s.delete(eventId); return s })
           setPendingReg(prev => { const s = new Set(prev); s.delete(eventId); return s })
+          fetchOpenEvents().then(setEvents).catch(() => {})
           toast.success('Registration cancelled.')
         } catch (e: any) {
           toast.error(e?.response?.data?.message ?? 'Could not cancel registration.')

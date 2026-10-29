@@ -25,7 +25,8 @@ class PlantingEventController extends Controller
         return $query->whereNotExists(function ($subquery) {
             $subquery->selectRaw('1')
                 ->from('plantation_event_requests')
-                ->whereColumn('plantation_event_requests.id', 'planting_events.source_request_id')
+                ->join('planting_events as pe_req', 'pe_req.source_request_id', '=', 'plantation_event_requests.id')
+                ->whereColumn('pe_req.id', 'event_registrations.planting_event_id')
                 ->whereColumn('plantation_event_requests.contact_email', 'event_registrations.email');
         });
     }
@@ -361,13 +362,17 @@ class PlantingEventController extends Controller
             ]);
 
             // Notify the user (in-app) that their registration is pending
-            if ($request->user()) {
-                $request->user()->notify(
-                    new EventRegistrationConfirmedNotification($plantingEvent, $registration)
-                );
+            try {
+                if ($request->user()) {
+                    $request->user()->notify(
+                        new EventRegistrationConfirmedNotification($plantingEvent, $registration)
+                    );
+                }
+                $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
+                Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Event registration notification failed: ' . $e->getMessage());
             }
-            $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
-            Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
 
             return response()->json([
                 'message'      => 'Your registration has been submitted and is pending approval. You will be notified by the event organizer.',
@@ -387,18 +392,23 @@ class PlantingEventController extends Controller
             'organization'        => $validated['organization'] ?? null,
             'age'                 => $validated['age'],
             'gender'              => $validated['gender'] ?? null,
+            'group_size'          => $validated['group_size'] ?? 1,
             'motivation'          => $validated['motivation'] ?? null,
             'registration_status' => 'confirmed',
         ]);
 
         // Notify the user (in-app) that they are confirmed
-        if ($request->user()) {
-            $request->user()->notify(
-                new EventRegistrationConfirmedNotification($plantingEvent, $registration)
-            );
+        try {
+            if ($request->user()) {
+                $request->user()->notify(
+                    new EventRegistrationConfirmedNotification($plantingEvent, $registration)
+                );
+            }
+            $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
+            Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Event registration notification failed: ' . $e->getMessage());
         }
-        $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
-        Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
 
         return response()->json([
             'message'      => 'Registered successfully!',
