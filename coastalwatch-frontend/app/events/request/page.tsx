@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import SidebarLayout from '@/components/layout/SidebarLayout'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
 import { fetchSites, fetchSpecies } from '@/lib/mangrove-api'
-import type { RestorationSite, MangroveSpecies } from '@/lib/types'
+import type { RestorationSite, MangroveSpecies, SeedlingAvailability } from '@/lib/types'
 import {
   TreePine, Building2, User, Mail, Phone, Calendar,
   MapPin, Users, FileText, CheckCircle, ArrowLeft, Send, X,
@@ -19,7 +19,6 @@ interface FormData {
   contact_person: string
   contact_email: string
   contact_phone: string
-  contact_age: string
   contact_address: string
   event_name: string
   description: string
@@ -28,13 +27,14 @@ interface FormData {
   preferred_restoration_site_id: string
   target_species: number[]
   expected_participants: string
+  seedlings_requested: string
   purpose: string
 }
 
 const empty = (): FormData => ({
-  organization_name: '', contact_person: '', contact_email: '', contact_phone: '', contact_age: '', contact_address: '',
+  organization_name: '', contact_person: '', contact_email: '', contact_phone: '', contact_address: '',
   event_name: '', description: '', preferred_date: '', preferred_location: '',
-  preferred_restoration_site_id: '', target_species: [], expected_participants: '', purpose: '',
+  preferred_restoration_site_id: '', target_species: [], expected_participants: '', seedlings_requested: '', purpose: '',
 })
 
 export default function EventRequestPage() {
@@ -46,8 +46,24 @@ export default function EventRequestPage() {
   const [minDate, setMinDate]       = useState('')
   const [sites, setSites] = useState<RestorationSite[]>([])
   const [species, setSpecies] = useState<MangroveSpecies[]>([])
+  const [seedlingAvailability, setSeedlingAvailability] = useState<SeedlingAvailability[]>([])
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
+
+  const loadSeedlingAvailability = useCallback(async () => {
+    setAvailabilityLoading(true)
+    setAvailabilityError('')
+    try {
+      const { data } = await api.get<SeedlingAvailability[]>('/seedlings/availability')
+      setSeedlingAvailability(Array.isArray(data) ? data : [])
+    } catch {
+      setAvailabilityError('Current seedling availability could not be loaded.')
+    } finally {
+      setAvailabilityLoading(false)
+    }
+  }, [])
 
   // Set min date on client only to avoid SSR/client hydration mismatch
   useEffect(() => {
@@ -55,6 +71,7 @@ export default function EventRequestPage() {
     setMinDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`)
     fetchSites().then(setSites).catch(() => {})
     fetchSpecies().then(setSpecies).catch(() => {})
+    loadSeedlingAvailability()
     const requestedEditId = Number(new URLSearchParams(window.location.search).get('edit'))
     if (requestedEditId) {
       api.get('/event-requests/mine').then(({ data }) => {
@@ -62,13 +79,13 @@ export default function EventRequestPage() {
         if (!request || request.status !== 'pending') { toast.error('Only your pending requests can be edited.'); return }
         setEditingId(request.id)
         setForm({
-          organization_name: request.organization_name ?? '', contact_person: request.contact_person ?? '', contact_email: request.contact_email ?? '', contact_phone: request.contact_phone ?? '', contact_age: String(request.contact_age ?? ''), contact_address: request.contact_address ?? '',
+          organization_name: request.organization_name ?? '', contact_person: request.contact_person ?? '', contact_email: request.contact_email ?? '', contact_phone: request.contact_phone ?? '', contact_address: request.contact_address ?? '',
           event_name: request.event_name ?? '', description: request.description ?? '', preferred_date: request.preferred_date?.slice(0, 10) ?? '', preferred_location: request.preferred_location ?? '',
-          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: (request.target_species ?? []).map(Number), expected_participants: String(request.expected_participants ?? ''), purpose: request.purpose ?? '',
+          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: (request.target_species ?? []).map(Number), expected_participants: String(request.expected_participants ?? ''), seedlings_requested: String(request.seedlings_requested ?? ''), purpose: request.purpose ?? '',
         })
       }).catch(() => toast.error('Could not load this event request for editing.'))
     }
-  }, [])
+  }, [loadSeedlingAvailability])
 
   // Pre-fill contact info from logged-in user
   useEffect(() => {
@@ -84,11 +101,28 @@ export default function EventRequestPage() {
   const set = (field: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [field]: e.target.value }))
 
+  const availableForSpecies = (item: MangroveSpecies) => {
+    const scientificName = item.scientific_name.trim().toLowerCase()
+    const scientificMatches = seedlingAvailability.filter(
+      entry => entry.species_name.trim().toLowerCase() === scientificName,
+    )
+    const matches = scientificMatches.length
+      ? scientificMatches
+      : seedlingAvailability.filter(
+        entry => entry.species_name.trim().toLowerCase() === item.local_name?.trim().toLowerCase(),
+      )
+    return matches.reduce((total, entry) => total + Math.max(0, Number(entry.total_remaining) || 0), 0)
+  }
+
+  const selectedSpecies = species.filter(item => form.target_species.includes(item.id))
+  const availableSeedlings = selectedSpecies.length
+    ? selectedSpecies.reduce((total, item) => total + availableForSpecies(item), 0)
+    : seedlingAvailability.reduce((total, item) => total + Math.max(0, Number(item.total_remaining) || 0), 0)
+
   const validate = (): boolean => {
     const errs: Record<string, string> = {}
     if (!form.organization_name.trim()) errs.organization_name = 'Organization name is required.'
     if (!form.contact_person.trim())    errs.contact_person    = 'Contact person is required.'
-    if (!form.contact_age || Number(form.contact_age) < 10 || Number(form.contact_age) > 120) errs.contact_age = 'Enter an age between 10 and 120.'
     if (!form.contact_address.trim()) errs.contact_address = 'Address is required.'
     if (!form.contact_phone.trim()) errs.contact_phone = 'Mobile number is required.'
     if (!form.contact_email.trim())     errs.contact_email     = 'Email is required.'
@@ -97,6 +131,8 @@ export default function EventRequestPage() {
     if (!form.preferred_date)           errs.preferred_date    = 'Preferred date is required.'
     if (!form.expected_participants || Number(form.expected_participants) < 1)
       errs.expected_participants = 'Enter the expected number of participants.'
+    if (!form.seedlings_requested || !Number.isInteger(Number(form.seedlings_requested)) || Number(form.seedlings_requested) < 1)
+      errs.seedlings_requested = 'Enter the number of seedlings requested.'
     if (!form.preferred_restoration_site_id) errs.preferred_restoration_site_id = 'Choose a restoration site.'
     if (!form.target_species.length) errs.target_species = 'Choose at least one target species.'
     setErrors(errs)
@@ -115,7 +151,7 @@ export default function EventRequestPage() {
       const payload = {
         ...form,
         expected_participants: Number(form.expected_participants),
-        contact_age: Number(form.contact_age),
+        seedlings_requested: Number(form.seedlings_requested),
         preferred_restoration_site_id: Number(form.preferred_restoration_site_id),
         target_species: form.target_species,
       }
@@ -209,10 +245,7 @@ export default function EventRequestPage() {
               {errors.organization_name && <p className="text-xs text-red-500 mt-1">{errors.organization_name}</p>}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><label className="label">Request Date</label><input className="input bg-gray-50" value={minDate} readOnly /></div>
-              <div><label className="label">Age *</label><input type="number" min={10} max={120} className={cn('input', errors.contact_age && 'border-red-400')} placeholder="Your age" value={form.contact_age} onChange={set('contact_age')} />{errors.contact_age && <p className="mt-1 text-xs text-red-500">{errors.contact_age}</p>}</div>
-            </div>
+            <div><label className="label">Request Date</label><input className="input bg-gray-50" value={minDate} readOnly /></div>
             <div><label className="label">Address *</label><input className={cn('input', errors.contact_address && 'border-red-400')} placeholder="Barangay, municipality, province" value={form.contact_address} onChange={set('contact_address')} />{errors.contact_address && <p className="mt-1 text-xs text-red-500">{errors.contact_address}</p>}</div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -268,7 +301,7 @@ export default function EventRequestPage() {
               {errors.event_name && <p className="text-xs text-red-500 mt-1">{errors.event_name}</p>}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="label">Preferred Date *</label>
                 <div className="relative">
@@ -291,6 +324,14 @@ export default function EventRequestPage() {
                 </div>
                 {errors.expected_participants && <p className="text-xs text-red-500 mt-1">{errors.expected_participants}</p>}
               </div>
+              <div>
+                <label className="label">Seedlings Requested *</label>
+                <input type="number" min={1} step={1} className={cn('input', errors.seedlings_requested && 'border-red-400')}
+                  placeholder="e.g. 100"
+                  value={form.seedlings_requested} onChange={set('seedlings_requested')}
+                  suppressHydrationWarning />
+                {errors.seedlings_requested && <p className="text-xs text-red-500 mt-1">{errors.seedlings_requested}</p>}
+              </div>
             </div>
 
             <div>
@@ -302,7 +343,20 @@ export default function EventRequestPage() {
 
             <div>
               <label className="label">Target Mangrove Species *</label>
-              <div className="mt-1 grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">{species.map(item => <label key={item.id} className="flex cursor-pointer items-center gap-2 rounded-lg p-2 text-sm text-gray-700 transition hover:bg-emerald-50"><input type="checkbox" checked={form.target_species.includes(item.id)} onChange={e => setForm(f => ({ ...f, target_species: e.target.checked ? [...f.target_species, item.id] : f.target_species.filter(id => id !== item.id) }))} />{item.local_name ?? item.scientific_name} <em className="text-xs text-gray-500">{item.scientific_name}</em></label>)}</div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
+              <div className="mt-1 grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">{species.map(item => <label key={item.id} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg p-2 text-sm text-gray-700 transition hover:bg-emerald-50"><span className="flex items-center gap-2"><input type="checkbox" checked={form.target_species.includes(item.id)} onChange={e => setForm(f => ({ ...f, target_species: e.target.checked ? [...f.target_species, item.id] : f.target_species.filter(id => id !== item.id) }))} />{item.local_name ?? item.scientific_name} <em className="text-xs text-gray-500">{item.scientific_name}</em></span><span className="shrink-0 text-[11px] text-emerald-700">{availableForSpecies(item).toLocaleString()} available</span></label>)}</div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
+              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold text-emerald-900">
+                    {selectedSpecies.length ? 'Available for selected species' : 'Total seedlings available'}
+                  </span>
+                  <span className="text-sm font-bold tabular-nums text-emerald-800">
+                    {availabilityLoading ? 'Loading…' : `${availableSeedlings.toLocaleString()} seedlings`}
+                  </span>
+                </div>
+                {availabilityError
+                  ? <div className="mt-1 flex items-center justify-between gap-2 text-xs text-red-700"><span>{availabilityError}</span><button type="button" onClick={loadSeedlingAvailability} className="font-semibold underline">Retry</button></div>
+                  : <p className="mt-1 text-[11px] text-emerald-700">Live remaining stock from the MENRO inventory. Availability may change before approval.</p>}
+              </div>
             </div>
 
             <div>
@@ -385,7 +439,9 @@ export default function EventRequestPage() {
                     <Row k="Preferred Site" v={selectedSite?.name ?? form.preferred_location ?? '—'} />
                     <Row k="Preferred Date" v={form.preferred_date} />
                     <Row k="Participants" v={`${form.expected_participants} expected`} />
-                    <Row k="Contact Person" v={`${form.contact_person} (${form.contact_age} yrs)`} />
+                    <Row k="Seedlings Requested" v={Number(form.seedlings_requested).toLocaleString()} />
+                    <Row k="Available Seedlings" v={availableSeedlings.toLocaleString()} />
+                    <Row k="Contact Person" v={form.contact_person} />
                     <Row k="Contact Info" v={`${form.contact_email} · ${form.contact_phone}`} />
                   </>
                 )

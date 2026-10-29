@@ -56,6 +56,8 @@ Route::get('/species',               [MangroveSpeciesController::class, 'index']
 Route::get('/reference/monitoring',  [MangroveSpeciesController::class, 'reference']);
 // Public: nurseries reference for the seedling-inventory source dropdown
 Route::get('/nurseries',             [NurseryController::class, 'index']);
+// Public aggregate stock count for plantation event requests.
+Route::get('/seedlings/availability', [SeedlingInventoryController::class, 'availability']);
 
 // Public: aggregate landing-page statistics (real figures, no auth)
 Route::get('/public/stats',          [PublicStatsController::class, 'index']);

@@ -9,6 +9,29 @@ use Illuminate\Http\Request;
 
 class SeedlingInventoryController extends Controller
 {
+    /** Public aggregate only; exposes no inventory records or user details. */
+    public function availability(): JsonResponse
+    {
+        $entries = SeedlingInventory::query()
+            ->withSum('movements', 'quantity')
+            ->get(['id', 'species_name', 'quantity_received', 'quantity_planted', 'quantity_damaged']);
+
+        $availability = $entries
+            ->filter(fn ($entry) => trim((string) $entry->species_name) !== '')
+            ->groupBy(fn ($entry) => trim((string) $entry->species_name))
+            ->map(fn ($speciesEntries, $speciesName) => [
+                'species_name' => $speciesName,
+                'total_remaining' => $speciesEntries->sum(fn ($entry) => max(
+                    0,
+                    (int) ($entry->movements_sum_quantity
+                        ?? ($entry->quantity_received - $entry->quantity_planted - $entry->quantity_damaged)),
+                )),
+            ])
+            ->values();
+
+        return response()->json($availability);
+    }
+
     /** Admin/staff/menro: full inventory list with optional site filter */
     public function index(Request $request): JsonResponse
     {

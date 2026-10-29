@@ -22,7 +22,6 @@ class PlantationEventRequestController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'contact_age'           => 'required|integer|min:10|max:120',
             'contact_address'       => 'required|string|max:500',
             'contact_phone'         => 'required|string|max:30',
             'preferred_restoration_site_id' => 'required|exists:restoration_sites,id',
@@ -36,6 +35,7 @@ class PlantationEventRequestController extends Controller
             'preferred_date'       => 'required|date|after_or_equal:today',
             'preferred_location'   => 'nullable|string|max:255',
             'expected_participants'=> 'required|integer|min:1|max:500',
+            'seedlings_requested'  => 'required|integer|min:1|max:1000000',
             'purpose'              => 'nullable|string|max:2000',
         ]);
 
@@ -129,6 +129,7 @@ class PlantationEventRequestController extends Controller
                     'description'         => trim(
                         ($plantationEventRequest->description ?? '') . "\n\n" .
                         "Organized by: {$plantationEventRequest->organization_name}. " .
+                    "Seedlings requested: {$plantationEventRequest->seedlings_requested}. " .
                     ($plantationEventRequest->target_species ? 'Target species: ' . \App\Models\MangroveSpecies::whereIn('id', $plantationEventRequest->target_species)->pluck('local_name')->filter()->implode(', ') . '. ' : '') .
                     ($plantationEventRequest->purpose ?? '')
                     ),
@@ -194,7 +195,6 @@ class PlantationEventRequestController extends Controller
         $validated = $request->validate([
             'organization_name' => 'required|string|max:255',
             'contact_person' => 'required|string|max:255',
-            'contact_age' => 'required|integer|min:10|max:120',
             'contact_address' => 'required|string|max:500',
             'contact_email' => 'required|email|max:255',
             'contact_phone' => 'required|string|max:30',
@@ -206,6 +206,7 @@ class PlantationEventRequestController extends Controller
             'target_species' => 'required|array|min:1',
             'target_species.*' => 'integer|exists:mangrove_species,id',
             'expected_participants' => 'required|integer|min:1|max:500',
+            'seedlings_requested' => 'required|integer|min:1|max:1000000',
             'purpose' => 'nullable|string|max:2000',
         ]);
         $plantationEventRequest->update($validated);

@@ -133,7 +133,7 @@ function EventsPageInner() {
     id: number; organization_name: string; contact_person: string
     contact_email: string; contact_phone?: string; event_name: string
     description?: string; preferred_date: string; preferred_location?: string
-    expected_participants: number; purpose?: string
+    expected_participants: number; seedlings_requested: number; purpose?: string
     status: RequestStatus; admin_notes?: string
     reviewed_by?: number; reviewed_at?: string
     reviewer?: { id: number; name: string }
@@ -1183,6 +1183,10 @@ function EventsPageInner() {
                                     <div className="flex items-center gap-2 text-gray-600">
                                       <Users className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                                       {req.expected_participants.toLocaleString()} expected participants
+                                    </div>
+                                    <div className="flex items-center gap-2 text-gray-600">
+                                      <TreePine className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                      {req.seedlings_requested.toLocaleString()} seedlings requested
                                     </div>
                                   </div>
                                 </div>

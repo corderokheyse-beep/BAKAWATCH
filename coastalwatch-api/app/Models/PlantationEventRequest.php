@@ -10,10 +10,10 @@ class PlantationEventRequest extends Model
     use HasFactory;
 
     protected $fillable = [
-        'requester_id', 'contact_age', 'contact_address', 'preferred_restoration_site_id', 'target_species',
+        'requester_id', 'contact_address', 'preferred_restoration_site_id', 'target_species',
         'organization_name', 'contact_person', 'contact_email', 'contact_phone',
         'event_name', 'description', 'preferred_date', 'preferred_location',
-        'expected_participants', 'purpose',
+        'expected_participants', 'seedlings_requested', 'purpose',
         'status', 'admin_notes', 'reviewed_by', 'reviewed_at', 'planting_event_id',
     ];
 
