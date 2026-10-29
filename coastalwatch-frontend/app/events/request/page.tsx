@@ -102,22 +102,25 @@ export default function EventRequestPage() {
     setForm(f => ({ ...f, [field]: e.target.value }))
 
   const availableForSpecies = (item: MangroveSpecies) => {
-    const scientificName = item.scientific_name.trim().toLowerCase()
-    const scientificMatches = seedlingAvailability.filter(
-      entry => entry.species_name.trim().toLowerCase() === scientificName,
+    const speciesNames = new Set(
+      [item.scientific_name, item.local_name]
+        .filter((name): name is string => Boolean(name?.trim()))
+        .map(name => name.trim().toLowerCase()),
     )
-    const matches = scientificMatches.length
-      ? scientificMatches
-      : seedlingAvailability.filter(
-        entry => entry.species_name.trim().toLowerCase() === item.local_name?.trim().toLowerCase(),
-      )
+    const matches = seedlingAvailability.filter(
+      entry => speciesNames.has(entry.species_name.trim().toLowerCase()),
+    )
     return matches.reduce((total, entry) => total + Math.max(0, Number(entry.total_remaining) || 0), 0)
   }
 
   const selectedSpecies = species.filter(item => form.target_species.includes(item.id))
+  const totalSeedlingsAvailable = seedlingAvailability.reduce(
+    (total, item) => total + Math.max(0, Number(item.total_remaining) || 0),
+    0,
+  )
   const availableSeedlings = selectedSpecies.length
     ? selectedSpecies.reduce((total, item) => total + availableForSpecies(item), 0)
-    : seedlingAvailability.reduce((total, item) => total + Math.max(0, Number(item.total_remaining) || 0), 0)
+    : totalSeedlingsAvailable
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}
@@ -225,6 +228,26 @@ export default function EventRequestPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-emerald-950">Total seedlings available</p>
+              <p className="mt-1 text-xs text-emerald-800">Current remaining stock in the MENRO inventory</p>
+            </div>
+            <p className="text-2xl font-bold tabular-nums text-emerald-800">
+              {availabilityLoading ? 'Loading...' : `${totalSeedlingsAvailable.toLocaleString()} seedlings`}
+            </p>
+          </div>
+          {selectedSpecies.length > 0 && (
+            <p className="mt-3 border-t border-emerald-100 pt-3 text-xs text-emerald-800">
+              Available for selected species: <strong>{availableSeedlings.toLocaleString()} seedlings</strong>
+            </p>
+          )}
+          {availabilityError
+            ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-red-700"><span>{availabilityError}</span><button type="button" onClick={loadSeedlingAvailability} className="font-semibold underline">Retry</button></div>
+            : <p className="mt-2 text-[11px] text-emerald-700">This total updates as seedlings are planted, lost, or added to inventory.</p>}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -344,19 +367,6 @@ export default function EventRequestPage() {
             <div>
               <label className="label">Target Mangrove Species *</label>
               <div className="mt-1 grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">{species.map(item => <label key={item.id} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg p-2 text-sm text-gray-700 transition hover:bg-emerald-50"><span className="flex items-center gap-2"><input type="checkbox" checked={form.target_species.includes(item.id)} onChange={e => setForm(f => ({ ...f, target_species: e.target.checked ? [...f.target_species, item.id] : f.target_species.filter(id => id !== item.id) }))} />{item.local_name ?? item.scientific_name} <em className="text-xs text-gray-500">{item.scientific_name}</em></span><span className="shrink-0 text-[11px] text-emerald-700">{availableForSpecies(item).toLocaleString()} available</span></label>)}</div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
-              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold text-emerald-900">
-                    {selectedSpecies.length ? 'Available for selected species' : 'Total seedlings available'}
-                  </span>
-                  <span className="text-sm font-bold tabular-nums text-emerald-800">
-                    {availabilityLoading ? 'Loading…' : `${availableSeedlings.toLocaleString()} seedlings`}
-                  </span>
-                </div>
-                {availabilityError
-                  ? <div className="mt-1 flex items-center justify-between gap-2 text-xs text-red-700"><span>{availabilityError}</span><button type="button" onClick={loadSeedlingAvailability} className="font-semibold underline">Retry</button></div>
-                  : <p className="mt-1 text-[11px] text-emerald-700">Live remaining stock from the MENRO inventory. Availability may change before approval.</p>}
-              </div>
             </div>
 
             <div>

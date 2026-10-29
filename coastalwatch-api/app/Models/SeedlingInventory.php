@@ -27,7 +27,13 @@ class SeedlingInventory extends Model
 
     public function getQuantityRemainingAttribute(): int
     {
-        return max(0, $this->quantity_received - $this->quantity_planted - $this->quantity_damaged);
+        return max(
+            0,
+            (int) $this->beginning_stock
+                + (int) $this->quantity_received
+                - (int) $this->quantity_planted
+                - (int) $this->quantity_damaged,
+        );
     }
 
     /**

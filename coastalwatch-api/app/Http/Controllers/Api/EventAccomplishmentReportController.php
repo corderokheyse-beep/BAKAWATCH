@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\EventAccomplishmentReport;
+use App\Models\MangroveSpecies;
 use App\Models\PlantingEvent;
 use App\Models\Report;
 use App\Models\SeedlingInventory;
@@ -13,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 
 class EventAccomplishmentReportController extends Controller
 {
@@ -63,18 +65,28 @@ class EventAccomplishmentReportController extends Controller
             return response()->json(['message' => 'Latitude and longitude must be submitted together.'], 422);
         }
 
-        $species = \App\Models\MangroveSpecies::findOrFail($data['mangrove_species_id']);
+        $species = MangroveSpecies::findOrFail($data['mangrove_species_id']);
+        $seedlingsPlanted = (int) $data['seedlings_planted'];
+        if ($seedlingsPlanted > 0) {
+            $available = $this->availableSeedlingQuantity($plantingEvent, $species);
+            if ($seedlingsPlanted > $available) {
+                throw ValidationException::withMessages([
+                    'seedlings_planted' => ["Only {$available} seedlings of this species are currently available."],
+                ]);
+            }
+        }
+
         $uploads = [];
         foreach ($request->file('photos') as $photo) {
             $uploaded = $this->cloudinary->upload($photo, 'event-accomplishments');
             $uploads[] = ['url' => $uploaded['secure_url'], 'public_id' => $uploaded['public_id']];
         }
 
-        $record = DB::transaction(function () use ($data, $uploads, $user, $site, $plantingEvent, $species) {
+        $record = DB::transaction(function () use ($data, $uploads, $user, $site, $plantingEvent, $species, $seedlingsPlanted) {
             $report = Report::create([
                 'user_id' => $user->id,
                 'title' => 'Event Accomplishment Report: ' . $plantingEvent->name,
-                'description' => 'Day 0 baseline. ' . $species->scientific_name . ': ' . $data['seedlings_planted'] . ' seedlings planted; ' . $data['volunteers_present'] . ' volunteers present.' . ($data['remarks'] ? ' ' . $data['remarks'] : ''),
+                'description' => 'Day 0 baseline. ' . $species->scientific_name . ': ' . $data['seedlings_planted'] . ' seedlings planted; ' . $data['volunteers_present'] . ' volunteers present.' . (!empty($data['remarks']) ? ' ' . $data['remarks'] : ''),
                 'latitude' => $data['latitude'] ?? $site->latitude,
                 'longitude' => $data['longitude'] ?? $site->longitude,
                 'location_name' => $site->name,
@@ -124,12 +136,7 @@ class EventAccomplishmentReportController extends Controller
                 'image_public_id' => $uploads[0]['public_id'],
                 'update_date' => $plantingEvent->scheduled_at->toDateString(),
             ]);
-            SeedlingInventory::create([
-                'restoration_site_id' => $site->id, 'recorded_by' => $user->id,
-                'species_name' => $species->scientific_name, 'date_received' => $plantingEvent->scheduled_at->toDateString(),
-                'beginning_stock' => 0, 'quantity_received' => 0, 'quantity_planted' => $data['seedlings_planted'],
-                'quantity_damaged' => 0, 'stage' => 'planted', 'notes' => 'Day 0 from event accomplishment report #' . $accomplishment->id,
-            ]);
+            $this->consumeSeedlings($plantingEvent, $species, $user, $seedlingsPlanted, $accomplishment->id);
 
             return $accomplishment;
         });
@@ -137,5 +144,102 @@ class EventAccomplishmentReportController extends Controller
         $admins = User::whereIn('role', ['menro', 'admin', 'staff'])->where('is_active', true)->get();
         Notification::send($admins, new \App\Notifications\EventAccomplishmentSubmittedNotification($record->load(['event', 'site', 'user'])));
         return response()->json(['message' => 'Accomplishment report submitted.', 'report' => $record->load(['event', 'site', 'species']), 'day_zero' => true], 201);
+    }
+
+    private function availableSeedlingQuantity(PlantingEvent $event, MangroveSpecies $species): int
+    {
+        return $this->inventoryEntriesFor($event, $species)->sum(
+            fn (SeedlingInventory $entry) => $this->inventoryBalance($entry),
+        );
+    }
+
+    private function consumeSeedlings(
+        PlantingEvent $event,
+        MangroveSpecies $species,
+        User $user,
+        int $quantity,
+        int $accomplishmentId,
+    ): void {
+        if ($quantity === 0) {
+            return;
+        }
+
+        $remaining = $quantity;
+        foreach ($this->inventoryEntriesFor($event, $species, true) as $entry) {
+            $balance = $this->inventoryBalance($entry);
+            if ($balance === 0) {
+                continue;
+            }
+
+            if ($entry->movements_sum_quantity === null) {
+                $entry->movements()->create([
+                    'recorded_by' => $user->id,
+                    'type' => 'stock_in',
+                    'quantity' => $balance,
+                    'movement_date' => $event->scheduled_at->toDateString(),
+                    'note' => 'Opening stock recorded before event accomplishment tracking.',
+                ]);
+            }
+
+            $deducted = min($balance, $remaining);
+            $entry->movements()->create([
+                'recorded_by' => $user->id,
+                'type' => 'planted_out',
+                'quantity' => -$deducted,
+                'movement_date' => $event->scheduled_at->toDateString(),
+                'note' => "Event planting: {$event->name} (accomplishment #{$accomplishmentId}).",
+            ]);
+            $remaining -= $deducted;
+
+            if ($remaining === 0) {
+                break;
+            }
+        }
+
+        if ($remaining > 0) {
+            $available = $quantity - $remaining;
+            throw ValidationException::withMessages([
+                'seedlings_planted' => ["Only {$available} seedlings of this species remain available; inventory changed before submission."],
+            ]);
+        }
+    }
+
+    private function inventoryEntriesFor(PlantingEvent $event, MangroveSpecies $species, bool $lock = false)
+    {
+        $speciesNames = array_values(array_filter(array_unique([
+            mb_strtolower(trim($species->scientific_name)),
+            mb_strtolower(trim((string) $species->local_name)),
+        ])));
+
+        $query = SeedlingInventory::query()
+            ->whereIn(DB::raw('LOWER(TRIM(species_name))'), $speciesNames)
+            ->withSum('movements', 'quantity')
+            ->orderByRaw(
+                'CASE WHEN restoration_site_id = ? THEN 0 WHEN restoration_site_id IS NULL THEN 1 ELSE 2 END',
+                [$event->restoration_site_id],
+            )
+            ->orderBy('date_received')
+            ->orderBy('id');
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query->get();
+    }
+
+    private function inventoryBalance(SeedlingInventory $entry): int
+    {
+        if ($entry->movements_sum_quantity !== null) {
+            return max(0, (int) $entry->movements_sum_quantity);
+        }
+
+        return max(
+            0,
+            (int) $entry->beginning_stock
+                + (int) $entry->quantity_received
+                - (int) $entry->quantity_planted
+                - (int) $entry->quantity_damaged,
+        );
     }
 }

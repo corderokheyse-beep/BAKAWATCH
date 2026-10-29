@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\InventoryMovement;
 use App\Models\SeedlingInventory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SeedlingInventoryController extends Controller
 {
@@ -14,7 +16,7 @@ class SeedlingInventoryController extends Controller
     {
         $entries = SeedlingInventory::query()
             ->withSum('movements', 'quantity')
-            ->get(['id', 'species_name', 'quantity_received', 'quantity_planted', 'quantity_damaged']);
+            ->get(['id', 'species_name', 'beginning_stock', 'quantity_received', 'quantity_planted', 'quantity_damaged']);
 
         $availability = $entries
             ->filter(fn ($entry) => trim((string) $entry->species_name) !== '')
@@ -24,7 +26,7 @@ class SeedlingInventoryController extends Controller
                 'total_remaining' => $speciesEntries->sum(fn ($entry) => max(
                     0,
                     (int) ($entry->movements_sum_quantity
-                        ?? ($entry->quantity_received - $entry->quantity_planted - $entry->quantity_damaged)),
+                        ?? ($entry->beginning_stock + $entry->quantity_received - $entry->quantity_planted - $entry->quantity_damaged)),
                 )),
             ])
             ->values();
@@ -82,16 +84,38 @@ class SeedlingInventoryController extends Controller
     /** Summary totals for dashboard widgets */
     public function summary(Request $request): JsonResponse
     {
-        $query = SeedlingInventory::query()
-            ->when($request->site_id, fn($q) => $q->where('restoration_site_id', $request->site_id));
+        $movements = InventoryMovement::query()
+            ->selectRaw(
+                "seedling_inventory_id,
+                 SUM(quantity) AS balance,
+                 SUM(CASE WHEN type = 'planted_out' THEN -quantity ELSE 0 END) AS ledger_planted,
+                 SUM(CASE WHEN type = 'lost' THEN -quantity
+                          WHEN type = 'adjustment' AND quantity < 0 THEN -quantity ELSE 0 END) AS ledger_lost"
+            )
+            ->groupBy('seedling_inventory_id');
 
-        $rows = $query->selectRaw(
-            'species_name,
-             SUM(quantity_received) AS total_received,
-             SUM(quantity_planted)  AS total_planted,
-             SUM(quantity_damaged)  AS total_damaged,
-             SUM(quantity_received - quantity_planted - quantity_damaged) AS total_remaining'
-        )->groupBy('species_name')->get();
+        $rows = SeedlingInventory::query()
+            ->leftJoinSub($movements, 'movement_totals', function ($join) {
+                $join->on('seedling_inventories.id', '=', 'movement_totals.seedling_inventory_id');
+            })
+            ->when($request->site_id, fn ($query) => $query->where('seedling_inventories.restoration_site_id', $request->site_id))
+            ->selectRaw(
+                "seedling_inventories.species_name,
+                 SUM(seedling_inventories.quantity_received) AS total_received,
+                 SUM(CASE WHEN movement_totals.seedling_inventory_id IS NOT NULL
+                          THEN movement_totals.ledger_planted ELSE seedling_inventories.quantity_planted END) AS total_planted,
+                 SUM(CASE WHEN movement_totals.seedling_inventory_id IS NOT NULL
+                          THEN movement_totals.ledger_lost ELSE seedling_inventories.quantity_damaged END) AS total_damaged,
+                 SUM(CASE WHEN movement_totals.seedling_inventory_id IS NOT NULL
+                          THEN CASE WHEN movement_totals.balance > 0 THEN movement_totals.balance ELSE 0 END
+                          ELSE CASE WHEN seedling_inventories.beginning_stock + seedling_inventories.quantity_received
+                                         - seedling_inventories.quantity_planted - seedling_inventories.quantity_damaged > 0
+                                    THEN seedling_inventories.beginning_stock + seedling_inventories.quantity_received
+                                         - seedling_inventories.quantity_planted - seedling_inventories.quantity_damaged
+                                    ELSE 0 END END) AS total_remaining"
+            )
+            ->groupBy('seedling_inventories.species_name')
+            ->get();
 
         return response()->json($rows);
     }
