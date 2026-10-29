@@ -26,7 +26,7 @@ class EventRegistrationSubmittedNotification extends Notification
             'registration_id' => $this->registration->id,
             'event_name' => $this->event->name,
             'participant_name' => $this->registration->full_name,
-            'message' => "{$this->registration->full_name} registered for {$this->event->name}.",
+            'message' => "{$this->registration->full_name} requested to join {$this->event->name} and is awaiting your confirmation.",
         ];
     }
 }

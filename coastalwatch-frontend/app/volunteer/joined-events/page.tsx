@@ -38,7 +38,7 @@ export default function JoinedEventsPage() {
   useEffect(() => {
     if (authLoading) return
     if (!user || !['volunteer', 'user', 'public'].includes(user.role)) { router.replace('/login'); return }
-    fetchMyRegistrations().then(data => setRecords((data as JoinedRecord[]).filter(record => record.registration_status === 'confirmed' && record.event?.status !== 'cancelled'))).catch(() => setRecords([])).finally(() => setLoading(false))
+    fetchMyRegistrations().then(data => setRecords((data as JoinedRecord[]).filter(record => ['confirmed', 'pending_approval'].includes(record.registration_status) && record.event?.status !== 'cancelled'))).catch(() => setRecords([])).finally(() => setLoading(false))
   }, [authLoading, user, router])
 
   if (authLoading || loading) return <SidebarLayout title="Joined Events"><div className="page-container flex justify-center py-24"><LoadingSpinner /></div></SidebarLayout>

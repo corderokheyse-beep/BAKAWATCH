@@ -140,13 +140,19 @@ function EventsPageInner() {
     created_at: string
   }
 
-  // Read tab + request_id from URL (set by notification click)
-  const urlTab       = searchParams.get('tab')
-  const urlRequestId = searchParams.get('request_id')
+  // Read tab + request_id + event_id + registration_id from URL (set by notification click)
+  const urlTab            = searchParams.get('tab')
+  const urlRequestId      = searchParams.get('request_id')
+  const urlEventId        = searchParams.get('event_id')
+  const urlRegistrationId = searchParams.get('registration_id')
 
   const [activeTab, setActiveTab]         = useState<'events' | 'requests'>(
     urlTab === 'requests' ? 'requests' : 'events'
   )
+  const [highlightedRegId, setHighlightedRegId] = useState<number | null>(
+    urlRegistrationId ? Number(urlRegistrationId) : null
+  )
+  const [reviewingRegId, setReviewingRegId] = useState<number | null>(null)
   const [requests, setRequests]           = useState<{ data: EventRequest[]; total: number; last_page: number; current_page: number } | null>(null)
   const [reqLoading, setReqLoading]       = useState(false)
   const [reqPage, setReqPage]             = useState(1)
@@ -313,6 +319,72 @@ function EventsPageInner() {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 300)
   }, [urlRequestId, requests]) // eslint-disable-line
+
+  // Open event details modal automatically when navigated from an event notification
+  useEffect(() => {
+    if (!urlEventId) return
+    const eventId = Number(urlEventId)
+    const match = [...events, ...pastEvents].find(e => e.id === eventId)
+    if (!match) return
+    setActiveTab('events')
+    setDetailEvent(match)
+    if (urlRegistrationId) {
+      const regId = Number(urlRegistrationId)
+      setHighlightedRegId(regId)
+      setTimeout(() => {
+        const el = document.getElementById(`event-reg-${regId}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 250)
+    }
+  }, [urlEventId, urlRegistrationId, events, pastEvents])
+
+  // ── Confirm or Reject a participant registration (MENRO / Staff / Admin) ──
+  const reviewParticipantRegistration = async (
+    eventId: number,
+    regId: number,
+    status: 'confirmed' | 'rejected',
+  ) => {
+    setReviewingRegId(regId)
+    try {
+      const { data } = await api.patch(`/events/${eventId}/registrations/${regId}/review`, {
+        status,
+      })
+      const updatedReg = data?.registration ?? {
+        id: regId,
+        registration_status: status,
+        admin_notes: status === 'confirmed' ? 'Confirmed by MENRO' : 'Rejected by MENRO',
+      }
+      const patchEventRegistrations = (evt: PlantingEvent): PlantingEvent => {
+        if (evt.id !== eventId) return evt
+        const nextRegs = (evt.registrations ?? []).map(r =>
+          r.id === regId ? { ...r, ...updatedReg, registration_status: status } : r
+        )
+        return { ...evt, registrations: nextRegs }
+      }
+      setEvents(prev => prev.map(patchEventRegistrations))
+      setPastEvents(prev => prev.map(patchEventRegistrations))
+      setDetailEvent(prev => (prev && prev.id === eventId ? patchEventRegistrations(prev) : prev))
+      toast.success(
+        status === 'confirmed'
+          ? 'Participant confirmed to join the event!'
+          : 'Participant registration rejected.'
+      )
+      if (canManage) {
+        fetchAllEvents()
+          .then(fresh => {
+            const all = fresh as PlantingEvent[]
+            setEvents(all.filter(e => !['completed', 'cancelled'].includes(e.status)))
+            setPastEvents(all.filter(e => ['completed', 'cancelled'].includes(e.status)))
+            setDetailEvent(prev => (prev ? all.find(e => e.id === prev.id) ?? prev : null))
+          })
+          .catch(() => {})
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message ?? 'Failed to update participant status.')
+    } finally {
+      setReviewingRegId(null)
+    }
+  }
 
   // â”€â”€ Review a request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const submitReview = async () => {
@@ -710,7 +782,26 @@ function EventsPageInner() {
                       <div className="mb-4">
                         <CapacityBar remaining={event.remaining_capacity ?? 0} max={event.max_volunteers} />
                       </div>
-                      {canManage && <button onClick={() => setDetailEvent(event)} className="mb-4 w-full min-h-10 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">View Event Details & Participants</button>}
+                      {canManage && (() => {
+                        const totalRegs = event.registrations?.length ?? 0
+                        const pendingRegs = (event.registrations ?? []).filter(
+                          r => r.registration_status === 'pending_approval' || (r.registration_status === 'confirmed' && !r.admin_notes)
+                        ).length
+                        return (
+                          <button
+                            onClick={() => setDetailEvent(event)}
+                            className="mb-4 w-full min-h-10 px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 flex items-center justify-center gap-2 flex-wrap"
+                          >
+                            <span>View Event Details & Participants ({totalRegs})</span>
+                            {pendingRegs > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <Clock className="w-3 h-3" />
+                                {pendingRegs} Pending Confirmation
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })()}
                       {canManage && <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-emerald-800"><strong>{event.attendance_confirmations_count ?? 0} Bantay Bakawan confirmed</strong>{(event.attendance_confirmations?.length ?? 0) > 0 && <p className="mt-1 text-emerald-700">{event.attendance_confirmations?.map(row => row.user.name).join(', ')}</p>}</div>}
 
                       {canRegister && (
@@ -880,6 +971,14 @@ function EventsPageInner() {
                         </div>
                       </div>
 
+                      {canManage && (
+                        <button
+                          onClick={() => setDetailEvent(event)}
+                          className="mb-2 w-full min-h-10 rounded-xl border border-gray-200 bg-white text-sm font-semibold text-gray-700 transition hover:bg-gray-100"
+                        >
+                          View Event Details & Participants ({event.registrations?.length ?? event.registrations_count ?? 0})
+                        </button>
+                      )}
                       {canConfirm && event.can_report_accomplishment ? (
                         event.report_submitted
                           ? <Link href={`/events/${event.id}/accomplishment`} className="w-full min-h-11 flex items-center justify-center rounded-xl bg-green-50 text-green-700 border border-green-200 text-sm font-semibold">Report Submitted · View Report</Link>
@@ -1738,13 +1837,235 @@ function EventsPageInner() {
         </div>
       )}
       {detailEvent && (
-        <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center" onClick={() => setDetailEvent(null)}>
-          <section role="dialog" aria-modal="true" aria-labelledby="event-detail-title" className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between gap-3"><h2 id="event-detail-title" className="text-lg font-bold">{detailEvent.name}</h2><button onClick={() => setDetailEvent(null)} aria-label="Close details" className="p-2"><X /></button></div>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">{detailEvent.description || 'No additional details provided.'}</p>
-            <div className="text-sm text-gray-600 space-y-1"><p>{formatDate(detailEvent.scheduled_at)}</p><p>{detailEvent.site?.name}{detailEvent.location_name ? ` · ${detailEvent.location_name}` : ''}</p><p>Volunteer registration spots: {detailEvent.remaining_capacity ?? detailEvent.max_volunteers} of {detailEvent.max_volunteers} remaining</p></div>
-            {canManage && <div className="border-t border-gray-100 pt-3"><h3 className="text-sm font-bold text-gray-900">Registered participants ({detailEvent.registrations?.length ?? 0})</h3>{detailEvent.registrations?.length ? <div className="mt-2 max-h-52 space-y-2 overflow-y-auto">{detailEvent.registrations.map(reg => <div key={reg.id} className="rounded-xl bg-gray-50 p-3 text-xs text-gray-600"><p className="font-semibold text-gray-900">{reg.full_name ?? 'Participant'}{reg.age ? ` · ${reg.age} years old` : ''}{(reg.group_size ?? 1) > 1 ? ` · group of ${reg.group_size}` : ''}</p><p>{reg.email ?? 'No email'}{reg.phone ? ` · ${reg.phone}` : ''}</p>{reg.address && <p>{reg.address}</p>}{reg.organization && <p>Organization: {reg.organization}</p>}</div>)}</div> : <p className="mt-2 text-xs text-gray-500">No registrations yet.</p>}</div>}
-            <button onClick={() => setDetailEvent(null)} className="btn-primary min-h-11 w-full justify-center">Close</button>
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm p-4 flex items-center justify-center animate-fade-in"
+          onClick={() => { setDetailEvent(null); setHighlightedRegId(null) }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-detail-title"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-emerald-950 to-teal-900 text-white">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">
+                  Planting Event Details
+                </p>
+                <h2 id="event-detail-title" className="text-lg font-bold leading-snug mt-0.5">
+                  {detailEvent.name}
+                </h2>
+              </div>
+              <button
+                onClick={() => { setDetailEvent(null); setHighlightedRegId(null) }}
+                aria-label="Close details"
+                className="p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+              {detailEvent.description && (
+                <div className="rounded-xl bg-gray-50 border border-gray-100 p-3.5 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                  {detailEvent.description}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                  <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px]">Date & Time</p>
+                  <p className="text-gray-800 font-semibold mt-1">{formatDate(detailEvent.scheduled_at)}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                  <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px]">Site & Location</p>
+                  <p className="text-gray-800 font-semibold mt-1">
+                    {detailEvent.site?.name ?? 'Restoration Site'}
+                    {detailEvent.location_name ? ` · ${detailEvent.location_name}` : ''}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                  <p className="text-gray-400 font-semibold uppercase tracking-wider text-[10px]">Remaining Spots</p>
+                  <p className="text-gray-800 font-semibold mt-1">
+                    {detailEvent.remaining_capacity ?? detailEvent.max_volunteers} of {detailEvent.max_volunteers} available
+                  </p>
+                </div>
+              </div>
+
+              {canManage && (() => {
+                const regs = detailEvent.registrations ?? []
+                const pendingCount = regs.filter(
+                  r => r.registration_status === 'pending_approval' || (r.registration_status === 'confirmed' && !r.admin_notes)
+                ).length
+                const confirmedCount = regs.filter(
+                  r => r.registration_status === 'confirmed' && !!r.admin_notes
+                ).length
+                return (
+                  <div className="border-t border-gray-100 pt-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900">
+                          Participant Join Requests & Registrations ({regs.length})
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Review participant details and confirm them to join this planting event.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        {pendingCount > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            <Clock className="w-3 h-3" /> {pendingCount} Awaiting Confirmation
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3" /> {confirmedCount} Confirmed
+                        </span>
+                      </div>
+                    </div>
+
+                    {regs.length > 0 ? (
+                      <div className="space-y-3">
+                        {regs.map(reg => {
+                          const isConfirmedByMenro = reg.registration_status === 'confirmed' && !!reg.admin_notes
+                          const isRejected = reg.registration_status === 'rejected'
+                          const isPending = !isConfirmedByMenro && !isRejected
+                          const isHighlighted = highlightedRegId === reg.id
+                          const isBusy = reviewingRegId === reg.id
+
+                          return (
+                            <div
+                              key={reg.id}
+                              id={`event-reg-${reg.id}`}
+                              className={cn(
+                                'rounded-xl border p-4 text-xs transition-all space-y-3',
+                                isHighlighted
+                                  ? 'border-teal-500 bg-teal-50/40 ring-2 ring-teal-500/30'
+                                  : isPending
+                                  ? 'border-amber-200 bg-amber-50/20'
+                                  : isConfirmedByMenro
+                                  ? 'border-emerald-200 bg-emerald-50/20'
+                                  : 'border-gray-200 bg-gray-50'
+                              )}
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-bold text-gray-900">
+                                      {reg.full_name ?? 'Participant'}
+                                    </p>
+                                    {(reg.group_size ?? 1) > 1 ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                        Group of {reg.group_size}
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600">
+                                        Individual
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-gray-500 mt-0.5">
+                                    {reg.age ? `${reg.age} yrs old` : ''}
+                                    {reg.age && reg.gender ? ' · ' : ''}
+                                    {reg.gender ? reg.gender : ''}
+                                  </p>
+                                </div>
+
+                                {/* Status Badge */}
+                                {isConfirmedByMenro ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed to Join
+                                  </span>
+                                ) : isRejected ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                    <XCircle className="w-3.5 h-3.5" /> Rejected
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    <Clock className="w-3.5 h-3.5" /> Awaiting Confirmation
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Contact & Personal Details Grid */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-600 bg-white/80 rounded-lg p-3 border border-gray-100">
+                                <p className="flex items-center gap-1.5">
+                                  <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                  <span className="truncate">{reg.email ?? 'No email provided'}</span>
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                  <span>{reg.phone || 'No phone provided'}</span>
+                                </p>
+                                {reg.address && (
+                                  <p className="flex items-center gap-1.5 sm:col-span-2">
+                                    <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                    <span>{reg.address}</span>
+                                  </p>
+                                )}
+                                {reg.organization && (
+                                  <p className="flex items-center gap-1.5 sm:col-span-2">
+                                    <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                    <span>Organization: <strong className="text-gray-800">{reg.organization}</strong></span>
+                                  </p>
+                                )}
+                                {reg.motivation && (
+                                  <p className="sm:col-span-2 text-gray-600 italic border-t border-gray-100 pt-1.5 mt-0.5">
+                                    “{reg.motivation}”
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* MENRO Action Buttons */}
+                              <div className="flex items-center justify-end gap-2 pt-1">
+                                {!isConfirmedByMenro && (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => reviewParticipantRegistration(detailEvent.id, reg.id, 'confirmed')}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+                                  >
+                                    {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                    Confirm Participant to Join
+                                  </button>
+                                )}
+                                {!isRejected && (
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => reviewParticipantRegistration(detailEvent.id, reg.id, 'rejected')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  >
+                                    {isBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                    {isConfirmedByMenro ? 'Revoke / Reject' : 'Reject'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-xs text-gray-500">
+                        No participant registrations yet.
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button
+                onClick={() => { setDetailEvent(null); setHighlightedRegId(null) }}
+                className="btn-primary min-h-10 px-6 justify-center"
+              >
+                Close
+              </button>
+            </div>
           </section>
         </div>
       )}

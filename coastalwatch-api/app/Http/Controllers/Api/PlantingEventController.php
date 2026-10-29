@@ -22,13 +22,14 @@ class PlantingEventController extends Controller
     {
         // A legacy approval flow wrote the requester's organization headcount
         // as a synthetic attendee. Do not treat that reservation as a signup.
-        return $query->whereNotExists(function ($subquery) {
-            $subquery->selectRaw('1')
-                ->from('plantation_event_requests')
-                ->join('planting_events as pe_req', 'pe_req.source_request_id', '=', 'plantation_event_requests.id')
-                ->whereColumn('pe_req.id', 'event_registrations.planting_event_id')
-                ->whereColumn('plantation_event_requests.contact_email', 'event_registrations.email');
-        });
+        return $query->where('event_registrations.registration_status', '!=', 'rejected')
+            ->whereNotExists(function ($subquery) {
+                $subquery->selectRaw('1')
+                    ->from('plantation_event_requests')
+                    ->join('planting_events as pe_req', 'pe_req.source_request_id', '=', 'plantation_event_requests.id')
+                    ->whereColumn('pe_req.id', 'event_registrations.planting_event_id')
+                    ->whereColumn('plantation_event_requests.contact_email', 'event_registrations.email');
+            });
     }
 
     /** Derive the visible lifecycle status from the stored override and event window. */
@@ -143,7 +144,7 @@ class PlantingEventController extends Controller
     {
         $events = PlantingEvent::withCount(['registrations', 'attendanceConfirmations'])
             ->withSum(['registrations as registered_volunteers' => fn($query) => $this->actualRegistrationCapacityQuery($query)], 'group_size')
-            ->with(['registrations:id,planting_event_id,full_name,email,phone,address,organization,age,group_size,registration_status'])
+            ->with(['registrations:id,planting_event_id,user_id,full_name,email,phone,address,organization,age,gender,group_size,motivation,admin_notes,registration_status,created_at'])
             ->withCount('attendanceConfirmations')
             ->with(['attendanceConfirmations.user:id,name'])
             ->with('site:id,name')
@@ -290,9 +291,16 @@ class PlantingEventController extends Controller
             'age'                 => $validated['age'] ?? null,
             'gender'              => $validated['gender'] ?? null,
             'group_size'          => $validated['group_size'] ?? 1,
-            'admin_notes'         => $validated['motivation'] ?? null,
+            'motivation'          => $validated['motivation'] ?? null,
             'registration_status' => 'pending_approval',
         ]);
+
+        try {
+            $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
+            Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Public event registration notification failed: ' . $e->getMessage());
+        }
 
         return response()->json([
             'message'      => 'Your registration has been submitted and is pending approval. You will be notified at ' . $validated['email'] . '.',
@@ -308,7 +316,8 @@ class PlantingEventController extends Controller
             return response()->json(['message' => 'This event is not open for registration.'], 422);
         }
 
-        $userId = $request->user()?->id;
+        $user = $request->user();
+        $userId = $user?->id;
 
         // Prevent duplicate registration by user_id
         if ($userId) {
@@ -319,8 +328,9 @@ class PlantingEventController extends Controller
             }
         }
 
-        // Collect participant details consistently for every authenticated registration.
-        $validated = $request->validate([
+        $hasPersonalPayload = $request->hasAny(['full_name', 'email', 'phone', 'address', 'age']);
+        if ($hasPersonalPayload) {
+            $validated = $request->validate([
                 'full_name'    => 'required|string|max:255',
                 'email'        => 'required|email|max:255',
                 'phone'        => 'required|string|max:30',
@@ -330,7 +340,20 @@ class PlantingEventController extends Controller
                 'gender'       => 'nullable|string|max:20',
                 'group_size'   => 'nullable|integer|min:1|max:500',
                 'motivation'   => 'nullable|string|max:1000',
-        ]);
+            ]);
+        } else {
+            $validated = [
+                'full_name'    => $user?->name ?? 'Participant',
+                'email'        => $user?->email,
+                'phone'        => $user?->phone,
+                'address'      => null,
+                'organization' => $user?->organization,
+                'age'          => null,
+                'gender'       => null,
+                'group_size'   => 1,
+                'motivation'   => null,
+            ];
+        }
 
         $registeredVolunteers = $this->actualRegistrationCapacityQuery(
             EventRegistration::where('planting_event_id', $plantingEvent->id)
@@ -339,49 +362,15 @@ class PlantingEventController extends Controller
             return response()->json(['message' => 'This event has reached its maximum volunteer capacity.'], 422);
         }
 
-        $emailTaken = EventRegistration::where('planting_event_id', $plantingEvent->id)
+        if (!empty($validated['email'])) {
+            $emailTaken = EventRegistration::where('planting_event_id', $plantingEvent->id)
                 ->where('email', $validated['email'])->exists();
-        if ($emailTaken) {
-            return response()->json(['message' => 'This email is already registered for this event.'], 422);
-        }
-
-        if ($plantingEvent->is_from_request) {
-            $registration = EventRegistration::create([
-                'planting_event_id'   => $plantingEvent->id,
-                'user_id'             => $userId,
-                'full_name'           => $validated['full_name'],
-                'email'               => $validated['email'],
-                'phone'               => $validated['phone'],
-                'address'             => $validated['address'],
-                'organization'        => $validated['organization'] ?? null,
-                'age'                 => $validated['age'] ?? null,
-                'gender'              => $validated['gender'] ?? null,
-                'group_size'          => $validated['group_size'] ?? 1,
-                'motivation'          => $validated['motivation'] ?? null,
-                'registration_status' => 'pending_approval',
-            ]);
-
-            // Notify the user (in-app) that their registration is pending
-            try {
-                if ($request->user()) {
-                    $request->user()->notify(
-                        new EventRegistrationConfirmedNotification($plantingEvent, $registration)
-                    );
-                }
-                $reviewers = User::whereIn('role', ['menro', 'staff', 'admin'])->where('is_active', true)->get();
-                Notification::send($reviewers, new EventRegistrationSubmittedNotification($plantingEvent, $registration));
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('Event registration notification failed: ' . $e->getMessage());
+            if ($emailTaken) {
+                return response()->json(['message' => 'This email is already registered for this event.'], 422);
             }
-
-            return response()->json([
-                'message'      => 'Your registration has been submitted and is pending approval. You will be notified by the event organizer.',
-                'registration' => $registration,
-                'status'       => 'pending_approval',
-            ], 201);
         }
 
-        // Standard event — immediate confirmation, with participant details recorded.
+        // All participant registrations are submitted for MENRO confirmation.
         $registration = EventRegistration::create([
             'planting_event_id'   => $plantingEvent->id,
             'user_id'             => $userId,
@@ -390,17 +379,17 @@ class PlantingEventController extends Controller
             'phone'               => $validated['phone'],
             'address'             => $validated['address'],
             'organization'        => $validated['organization'] ?? null,
-            'age'                 => $validated['age'],
+            'age'                 => $validated['age'] ?? null,
             'gender'              => $validated['gender'] ?? null,
             'group_size'          => $validated['group_size'] ?? 1,
             'motivation'          => $validated['motivation'] ?? null,
-            'registration_status' => 'confirmed',
+            'registration_status' => 'pending_approval',
         ]);
 
-        // Notify the user (in-app) that they are confirmed
+        // Notify the participant and MENRO reviewers
         try {
-            if ($request->user()) {
-                $request->user()->notify(
+            if ($user) {
+                $user->notify(
                     new EventRegistrationConfirmedNotification($plantingEvent, $registration)
                 );
             }
@@ -411,10 +400,51 @@ class PlantingEventController extends Controller
         }
 
         return response()->json([
-            'message'      => 'Registered successfully!',
+            'message'      => 'Your registration request has been submitted and is awaiting MENRO confirmation.',
             'registration' => $registration,
-            'status'       => 'confirmed',
+            'status'       => 'pending_approval',
         ], 201);
+    }
+
+    /** menro / admin / staff — confirm or reject a participant's event registration */
+    public function reviewRegistration(Request $request, PlantingEvent $plantingEvent, EventRegistration $eventRegistration): JsonResponse
+    {
+        if ((int) $eventRegistration->planting_event_id !== (int) $plantingEvent->id) {
+            return response()->json(['message' => 'Registration does not belong to this event.'], 404);
+        }
+
+        $validated = $request->validate([
+            'status'      => 'required|in:confirmed,rejected',
+            'admin_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $defaultNote = $validated['status'] === 'confirmed'
+            ? 'Confirmed by MENRO'
+            : 'Rejected by MENRO';
+
+        $eventRegistration->update([
+            'registration_status' => $validated['status'],
+            'admin_notes'         => $validated['admin_notes'] ?? $defaultNote,
+        ]);
+
+        $freshRegistration = $eventRegistration->fresh();
+
+        try {
+            if ($freshRegistration->user) {
+                $freshRegistration->user->notify(
+                    new EventRegistrationConfirmedNotification($plantingEvent, $freshRegistration)
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Event registration review notification failed: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'message'      => $validated['status'] === 'confirmed'
+                ? 'Participant confirmed to join the event.'
+                : 'Participant registration rejected.',
+            'registration' => $freshRegistration,
+        ]);
     }
 
     /**

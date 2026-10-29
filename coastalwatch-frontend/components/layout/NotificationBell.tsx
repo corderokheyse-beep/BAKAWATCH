@@ -99,19 +99,21 @@ function getNotificationUrl(n: Notification): string | null {
 
     // Participant/volunteer: go to the specific event
     case 'new_event':
-      return d.event_id ? `/events` : '/events'
+      return d.event_id ? `/events?event_id=${d.event_id}` : '/events'
 
     case 'event_cancelled':
       return '/events'
 
     case 'event_registration':
-      return '/events'
+      return d.event_id ? `/events?event_id=${d.event_id}` : '/events'
 
     case 'event_registration_submitted':
-      return '/events'
+      return d.event_id
+        ? `/events?event_id=${d.event_id}${d.registration_id ? `&registration_id=${d.registration_id}` : ''}`
+        : '/events'
 
     case 'event_updated':
-      return d.event_id ? `/events` : '/events'
+      return d.event_id ? `/events?event_id=${d.event_id}` : '/events'
 
     // Field reports
     case 'report_status':

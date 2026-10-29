@@ -137,6 +137,10 @@ export interface Notification {
     report_id?: number
     request_id?: number
     event_id?: number
+    registration_id?: number
+    event_name?: string
+    participant_name?: string
+    registration_status?: string
     title?: string
     status?: string
     message: string
@@ -316,8 +320,9 @@ export interface PlantingEvent {
   attendance_confirmations_count?: number
   attendance_confirmations?: { user: { id: number; name: string } }[]
   registrations?: {
-    id: number; full_name?: string; email?: string; phone?: string; address?: string;
-    organization?: string; age?: number; group_size?: number; registration_status?: string
+    id: number; user_id?: number; full_name?: string; email?: string; phone?: string; address?: string;
+    organization?: string; age?: number; gender?: string; group_size?: number;
+    motivation?: string; admin_notes?: string; registration_status?: string; created_at?: string
   }[]
   can_report_accomplishment?: boolean
   report_submitted?: boolean

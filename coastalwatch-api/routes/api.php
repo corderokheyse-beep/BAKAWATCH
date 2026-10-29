@@ -333,6 +333,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/events', [PlantingEventController::class, 'store']);
         Route::put('/events/{plantingEvent}', [PlantingEventController::class, 'update']);
         Route::get('/events/all', [PlantingEventController::class, 'allEvents']);
+        Route::patch('/events/{plantingEvent}/registrations/{eventRegistration}/review', [PlantingEventController::class, 'reviewRegistration']);
         Route::get('/event-accomplishments', [EventAccomplishmentReportController::class, 'index']);
 
         // Plantation event requests — review & manage
