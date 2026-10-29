@@ -10,7 +10,7 @@ import { fetchSites, fetchSpecies } from '@/lib/mangrove-api'
 import type { RestorationSite, MangroveSpecies } from '@/lib/types'
 import {
   TreePine, Building2, User, Mail, Phone, Calendar,
-  MapPin, Users, FileText, CheckCircle, ArrowLeft, Send,
+  MapPin, Users, FileText, CheckCircle, ArrowLeft, Send, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -47,6 +47,7 @@ export default function EventRequestPage() {
   const [sites, setSites] = useState<RestorationSite[]>([])
   const [species, setSpecies] = useState<MangroveSpecies[]>([])
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [confirmSubmit, setConfirmSubmit] = useState(false)
 
   // Set min date on client only to avoid SSR/client hydration mismatch
   useEffect(() => {
@@ -102,10 +103,13 @@ export default function EventRequestPage() {
     return Object.keys(errs).length === 0
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!validate()) return
-    if (!window.confirm(`${editingId ? 'Save changes to' : 'Submit'} the planting event request “${form.event_name}”${editingId ? '?' : ' for MENRO review?'}`)) return
+    setConfirmSubmit(true)
+  }
+
+  const confirmAndSubmitRequest = async () => {
     setSubmitting(true)
     try {
       const payload = {
@@ -117,9 +121,11 @@ export default function EventRequestPage() {
       }
       if (editingId) await api.put(`/event-requests/${editingId}`, payload)
       else await api.post('/event-requests', payload)
+      setConfirmSubmit(false)
       setSubmitted(true)
       toast.success('Request submitted successfully!')
     } catch (err: any) {
+      setConfirmSubmit(false)
       const apiErrors = err?.response?.data?.errors ?? {}
       const mapped: Record<string, string> = {}
       Object.entries(apiErrors).forEach(([k, v]) => { mapped[k] = (v as string[]).join(' ') })
@@ -346,6 +352,57 @@ export default function EventRequestPage() {
           </button>
         </form>
       </div>
+
+      {confirmSubmit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-emerald-100 bg-emerald-50/70 rounded-t-2xl">
+              <div>
+                <h2 className="text-sm font-bold text-emerald-950">
+                  {editingId ? 'Confirm Request Changes' : 'Confirm Planting Event Request'}
+                </h2>
+                <p className="text-xs text-emerald-700">
+                  {editingId ? `Save changes to “${form.event_name}”?` : `Submit “${form.event_name}” for MENRO review?`}
+                </p>
+              </div>
+              <button onClick={() => setConfirmSubmit(false)} disabled={submitting} className="p-1.5 rounded-lg hover:bg-emerald-100/70 transition-colors">
+                <X className="w-4 h-4 text-emerald-700" />
+              </button>
+            </div>
+            <div className="p-6 space-y-2.5 text-sm">
+              {(() => {
+                const selectedSite = sites.find(s => String(s.id) === form.preferred_restoration_site_id)
+                const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+                  <div className="flex gap-3">
+                    <span className="w-32 shrink-0 text-gray-400 font-medium text-xs uppercase tracking-wide pt-0.5">{k}</span>
+                    <span className="text-gray-800 font-medium min-w-0 break-words">{v}</span>
+                  </div>
+                )
+                return (
+                  <>
+                    <Row k="Event Name" v={form.event_name} />
+                    <Row k="Organization" v={form.organization_name} />
+                    <Row k="Preferred Site" v={selectedSite?.name ?? form.preferred_location ?? '—'} />
+                    <Row k="Preferred Date" v={form.preferred_date} />
+                    <Row k="Participants" v={`${form.expected_participants} expected`} />
+                    <Row k="Contact Person" v={`${form.contact_person} (${form.contact_age} yrs)`} />
+                    <Row k="Contact Info" v={`${form.contact_email} · ${form.contact_phone}`} />
+                  </>
+                )
+              })()}
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button type="button" onClick={() => setConfirmSubmit(false)} disabled={submitting} className="btn-secondary flex-1">
+                Back to Edit
+              </button>
+              <button type="button" onClick={confirmAndSubmitRequest} disabled={submitting} className="btn-primary flex-1 gap-2">
+                <Send className="w-4 h-4" />
+                {submitting ? 'Submitting…' : editingId ? 'Confirm & Save' : 'Confirm & Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarLayout>
   )
 }

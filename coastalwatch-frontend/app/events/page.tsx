@@ -177,6 +177,15 @@ function EventsPageInner() {
   const [personalSubmitting, setPersonalSubmitting] = useState(false)
   const [personalSuccess, setPersonalSuccess]       = useState(false)
   const [personalRegistrationStatus, setPersonalRegistrationStatus] = useState<'confirmed' | 'pending_approval'>('confirmed')
+  const [confirmJoin, setConfirmJoin]       = useState(false)
+  const [confirmPrompt, setConfirmPrompt]   = useState<{
+    title: string
+    message: string
+    confirmLabel: string
+    tone?: 'primary' | 'danger'
+    onConfirm: () => Promise<void> | void
+  } | null>(null)
+  const [confirmPromptBusy, setConfirmPromptBusy] = useState(false)
   // Cancel registration state
   const [cancelling, setCancelling] = useState<number | null>(null)
 
@@ -242,22 +251,32 @@ function EventsPageInner() {
     }
   }, [authLoading, user]) // eslint-disable-line
 
-  async function toggleAttendance(eventId: number) {
+  function toggleAttendance(eventId: number) {
     const confirmed = attendance.has(eventId)
-    if (!confirm(confirmed ? 'Undo your attendance confirmation?' : 'Confirm that you will attend this planting event?')) return
-    setAttendanceBusy(eventId)
-    try {
-      if (confirmed) {
-        await undoEventAttendance(eventId)
-        setAttendance(prev => { const next = new Set(prev); next.delete(eventId); return next })
-        toast.success('Attendance confirmation removed.')
-      } else {
-        await confirmEventAttendance(eventId)
-        setAttendance(prev => new Set(prev).add(eventId))
-        toast.success('Attendance confirmed. MENRO has been notified.')
-      }
-    } catch (err: any) { toast.error(err?.response?.data?.message ?? 'Could not update attendance.') }
-    finally { setAttendanceBusy(null) }
+    const event = events.find(e => e.id === eventId)
+    setConfirmPrompt({
+      title: confirmed ? 'Undo Attendance Confirmation' : 'Confirm Event Attendance',
+      message: confirmed
+        ? `Are you sure you want to remove your attendance confirmation${event ? ` for “${event.name}”` : ''}?`
+        : `Confirm that you will attend${event ? ` “${event.name}”` : ' this planting event'}? MENRO will be notified.`,
+      confirmLabel: confirmed ? 'Undo Confirmation' : 'Confirm Attendance',
+      tone: confirmed ? 'danger' : 'primary',
+      onConfirm: async () => {
+        setAttendanceBusy(eventId)
+        try {
+          if (confirmed) {
+            await undoEventAttendance(eventId)
+            setAttendance(prev => { const next = new Set(prev); next.delete(eventId); return next })
+            toast.success('Attendance confirmation removed.')
+          } else {
+            await confirmEventAttendance(eventId)
+            setAttendance(prev => new Set(prev).add(eventId))
+            toast.success('Attendance confirmed. MENRO has been notified.')
+          }
+        } catch (err: any) { toast.error(err?.response?.data?.message ?? 'Could not update attendance.') }
+        finally { setAttendanceBusy(null) }
+      },
+    })
   }
 
   // â”€â”€ Load pending count badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -312,22 +331,32 @@ function EventsPageInner() {
     finally { setReviewing(null) }
   }
 
-  // â”€â”€ Registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Registration ──────────────────────────────────────────────────────────
   const handleRegister = async (event: PlantingEvent) => {
     setPersonalForm(emptyPersonalForm())
     setPersonalSuccess(false)
+    setConfirmJoin(false)
     setPersonalModal(event)
   }
 
-  // â”€â”€ Submit personal info registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const submitPersonalRegistration = async () => {
+  // ── Step 1: Validate personal info and open confirmation modal ─────────────
+  const submitPersonalRegistration = () => {
     if (!personalModal) return
     if (!personalForm.full_name.trim() || !personalForm.email.trim() ||
         !personalForm.phone.trim() || !personalForm.address.trim() || !personalForm.age.trim()) {
       toast.error('Please fill in all required fields.')
       return
     }
-    if (!confirm(`Confirm that you want to join “${personalModal.name}”?`)) return
+    if (personalForm.is_representative && (!personalForm.group_size || Number(personalForm.group_size) < 2)) {
+      toast.error('Please enter at least 2 participants when joining on behalf of a group.')
+      return
+    }
+    setConfirmJoin(true)
+  }
+
+  // ── Step 2: Persist personal info registration after modal confirmation ────
+  const confirmPersonalRegistration = async () => {
+    if (!personalModal) return
     setPersonalSubmitting(true)
     try {
       const endpoint = user
@@ -346,6 +375,7 @@ function EventsPageInner() {
       })
       const status = response.data?.status === 'pending_approval' ? 'pending_approval' : 'confirmed'
       setPersonalRegistrationStatus(status)
+      setConfirmJoin(false)
       setPersonalSuccess(true)
       if (status === 'pending_approval') setPendingReg(prev => new Set(prev).add(personalModal.id))
       else setRegistered(prev => new Set(prev).add(personalModal.id))
@@ -354,33 +384,41 @@ function EventsPageInner() {
     } finally { setPersonalSubmitting(false) }
   }
 
-  // â”€â”€ Cancel registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const handleCancelRegistration = async (eventId: number) => {
+  // ── Cancel registration ───────────────────────────────────────────────────
+  const handleCancelRegistration = (eventId: number) => {
     const event = [...events, ...pastEvents].find(item => item.id === eventId)
     const scheduled = event ? new Date(event.scheduled_at.replace(' ', 'T')) : null
     if (!scheduled || scheduled.getTime() - Date.now() < 24 * 60 * 60 * 1000) {
       toast.error('Registration can only be cancelled at least one day before the event.')
       return
     }
-    if (!confirm('Cancel your registration for this event?')) return
-    setCancelling(eventId)
-    try {
-      await api.delete(`/events/${eventId}/unregister`)
-      setRegistered(prev => { const s = new Set(prev); s.delete(eventId); return s })
-      setPendingReg(prev => { const s = new Set(prev); s.delete(eventId); return s })
-      toast.success('Registration cancelled.')
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Could not cancel registration.')
-    } finally { setCancelling(null) }
+    setConfirmPrompt({
+      title: 'Cancel Event Registration',
+      message: `Are you sure you want to cancel your registration${event ? ` for “${event.name}”` : ' for this event'}?`,
+      confirmLabel: 'Yes, Cancel Registration',
+      tone: 'danger',
+      onConfirm: async () => {
+        setCancelling(eventId)
+        try {
+          await api.delete(`/events/${eventId}/unregister`)
+          setRegistered(prev => { const s = new Set(prev); s.delete(eventId); return s })
+          setPendingReg(prev => { const s = new Set(prev); s.delete(eventId); return s })
+          toast.success('Registration cancelled.')
+        } catch (e: any) {
+          toast.error(e?.response?.data?.message ?? 'Could not cancel registration.')
+        } finally { setCancelling(null) }
+      },
+    })
   }
 
   const cancellationAllowed = (event: PlantingEvent) =>
     event.status !== 'on-going' && new Date(event.scheduled_at.replace(' ', 'T')).getTime() - Date.now() > 24 * 60 * 60 * 1000
 
-  // â”€â”€ Re-join (open modal again) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Re-join (open modal again) ────────────────────────────────────────────
   const handleRejoin = (event: PlantingEvent) => {
     setPersonalForm(emptyPersonalForm())
     setPersonalSuccess(false)
+    setConfirmJoin(false)
     setPersonalModal(event)
   }
 
@@ -503,13 +541,21 @@ function EventsPageInner() {
     } finally { setSubmitting(false) }
   }
 
-  async function deleteEvent(id: number) {
-    if (!confirm('Delete this event?')) return
-    try {
-      await api.put(`/events/${id}`, { status: 'cancelled' })
-      setEvents(prev => prev.filter(e => e.id !== id))
-      toast.success('Event cancelled')
-    } catch { toast.error('Failed to cancel event') }
+  function deleteEvent(id: number) {
+    const event = events.find(e => e.id === id)
+    setConfirmPrompt({
+      title: 'Cancel Planting Event',
+      message: `Are you sure you want to cancel${event ? ` “${event.name}”` : ' this event'}? Registered participants will be notified.`,
+      confirmLabel: 'Yes, Cancel Event',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.put(`/events/${id}`, { status: 'cancelled' })
+          setEvents(prev => prev.filter(e => e.id !== id))
+          toast.success('Event cancelled')
+        } catch { toast.error('Failed to cancel event') }
+      },
+    })
   }
 
   if (loading) return <SidebarLayout><LoadingSpinner /></SidebarLayout>
@@ -1221,7 +1267,13 @@ function EventsPageInner() {
                     <label className="flex items-start gap-3 cursor-pointer group">
                       <input type="checkbox" className="mt-0.5 rounded text-primary-600 w-4 h-4 shrink-0"
                         checked={personalForm.is_representative}
-                        onChange={e => setPersonalForm(f => ({ ...f, is_representative: e.target.checked, group_size: e.target.checked ? f.group_size : '1' }))} />
+                        onChange={e => setPersonalForm(f => ({
+                          ...f,
+                          is_representative: e.target.checked,
+                          group_size: e.target.checked
+                            ? (Number(f.group_size) >= 2 ? f.group_size : '2')
+                            : '1',
+                        }))} />
                       <div>
                         <span className="text-sm font-semibold text-gray-800">I am a representative joining on behalf of a group or organization</span>
                         <p className="text-xs text-gray-400 mt-0.5">Check this if you are requesting to bring multiple people from your organization.</p>
@@ -1249,7 +1301,7 @@ function EventsPageInner() {
                 </div>
 
                 <div className="flex gap-3 pt-1">
-                  <button onClick={() => setPersonalModal(null)} className="btn-secondary flex-1">Cancel</button>
+                  <button onClick={() => { setPersonalModal(null); setConfirmJoin(false) }} className="btn-secondary flex-1">Cancel</button>
                   <button onClick={submitPersonalRegistration} disabled={personalSubmitting}
                     className="btn-primary flex-1 gap-2">
                     <Send className="w-4 h-4" />
@@ -1258,6 +1310,118 @@ function EventsPageInner() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm Participant Registration Modal ─────────────────────────── */}
+      {personalModal && confirmJoin && !personalSuccess && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div role="dialog" aria-modal="true" aria-labelledby="confirm-join-title" className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-emerald-100 bg-emerald-50/70 rounded-t-2xl">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 id="confirm-join-title" className="text-sm font-bold text-emerald-950">Confirm Event Registration</h2>
+                  <p className="text-xs text-emerald-700">Confirm that you want to join “{personalModal.name}”?</p>
+                </div>
+              </div>
+              <button onClick={() => setConfirmJoin(false)} disabled={personalSubmitting} className="p-1.5 rounded-lg hover:bg-emerald-100/70 transition-colors">
+                <X className="w-4 h-4 text-emerald-700" />
+              </button>
+            </div>
+            <div className="p-6 space-y-2.5 text-sm">
+              {(() => {
+                const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+                  <div className="flex gap-3">
+                    <span className="w-32 shrink-0 text-gray-400 font-medium text-xs uppercase tracking-wide pt-0.5">{k}</span>
+                    <span className="text-gray-800 font-medium min-w-0 break-words">{v}</span>
+                  </div>
+                )
+                return (
+                  <>
+                    <Row k="Event" v={personalModal.name} />
+                    <Row k="Date & Time" v={formatDate(personalModal.scheduled_at)} />
+                    <Row k="Full Name" v={personalForm.full_name} />
+                    <Row k="Email" v={personalForm.email} />
+                    <Row k="Phone" v={personalForm.phone} />
+                    <Row k="Address" v={personalForm.address} />
+                    <Row k="Age" v={`${personalForm.age} yrs old`} />
+                    {personalForm.organization && <Row k="Organization" v={personalForm.organization} />}
+                    <Row
+                      k="Participants"
+                      v={personalForm.is_representative
+                        ? `Group of ${personalForm.group_size} people`
+                        : 'Individual (1 person)'}
+                    />
+                  </>
+                )
+              })()}
+            </div>
+            <div className="flex gap-3 p-6 pt-0">
+              <button onClick={() => setConfirmJoin(false)} disabled={personalSubmitting} className="btn-secondary flex-1">
+                Back to Edit
+              </button>
+              <button onClick={confirmPersonalRegistration} disabled={personalSubmitting} className="btn-primary flex-1 gap-2">
+                {personalSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                {personalSubmitting ? 'Submitting…' : 'Confirm & Join'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Generic Confirmation Modal (Cancel Registration / Attendance / Delete Event) ── */}
+      {confirmPrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-in">
+            <div className={cn(
+              'px-6 py-4 border-b flex items-center justify-between',
+              confirmPrompt.tone === 'danger' ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'
+            )}>
+              <h3 className={cn(
+                'font-bold text-sm',
+                confirmPrompt.tone === 'danger' ? 'text-red-900' : 'text-emerald-900'
+              )}>
+                {confirmPrompt.title}
+              </h3>
+              <button
+                onClick={() => !confirmPromptBusy && setConfirmPrompt(null)}
+                disabled={confirmPromptBusy}
+                className="p-1.5 rounded-lg hover:bg-black/5 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 leading-relaxed">{confirmPrompt.message}</p>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setConfirmPrompt(null)}
+                  disabled={confirmPromptBusy}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    setConfirmPromptBusy(true)
+                    try {
+                      await confirmPrompt.onConfirm()
+                      setConfirmPrompt(null)
+                    } finally {
+                      setConfirmPromptBusy(false)
+                    }
+                  }}
+                  disabled={confirmPromptBusy}
+                  className={cn('flex-1', confirmPrompt.tone === 'danger' ? 'btn-danger' : 'btn-primary')}
+                >
+                  {confirmPromptBusy ? 'Processing…' : confirmPrompt.confirmLabel}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
