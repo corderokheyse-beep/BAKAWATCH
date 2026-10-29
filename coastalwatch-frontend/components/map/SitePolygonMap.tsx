@@ -40,6 +40,19 @@ const GLORIA_COASTAL_BOUNDS: [[number, number], [number, number]] = [
 // Fallback spread center for sites without coordinates
 const GLORIA_FALLBACK: [number, number] = [12.9330, 121.4800]
 
+// Village-center coordinates for Gloria's 8 coastal barangays (used when a site
+// has no explicit latitude/longitude or polygon centroid).
+const BARANGAY_COORDS: Record<string, [number, number]> = {
+  'agsalin':      [12.8838292, 121.4727700],
+  'maragooc':     [12.8965308, 121.4728645],
+  'guimbonan':    [12.9051536, 121.4748765],
+  'sta. theresa': [12.9179488, 121.4821010],
+  'balete':       [12.9349593, 121.4714367],
+  'san antonio':  [12.9450137, 121.4926727],
+  'kawit':        [12.9624753, 121.4811897],
+  'tambong':      [12.9720401, 121.4888646],
+}
+
 // Status glyphs are drawn as inline SVG paths (no emoji) so they render
 // identically on every device and can never be corrupted by text encoding.
 const STATUS_GLYPH: Record<string, string> = {
@@ -130,6 +143,7 @@ export default function SitePolygonMap({
   const boundaryLayerRef = useRef<any>(null) // the editable site's boundary layer
   const LRef         = useRef<any>(null)
   const roRef        = useRef<ResizeObserver | null>(null)
+  const [mapReady, setMapReady] = useState(false)
   const [selected, setSelected] = useState<RestorationSite | null>(null)
   const [drawing, setDrawing]   = useState(false)
   const [drawType, setDrawType] = useState<'mangrove' | 'planted'>('mangrove')
@@ -248,6 +262,7 @@ export default function SitePolygonMap({
 
       L.control.zoom({ position: 'topleft' }).addTo(map)
       L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map)
+      setMapReady(true)
 
       // When the map fills a flexible container (height:100%), the pixel size
       // isn't final at init. Recalculate once the layout settles, and again on
@@ -262,6 +277,7 @@ export default function SitePolygonMap({
 
     return () => {
       destroyed = true
+      setMapReady(false)
       if (rafId) cancelAnimationFrame(rafId)
       roRef.current?.disconnect()
       roRef.current = null
@@ -275,7 +291,7 @@ export default function SitePolygonMap({
   useEffect(() => {
     const L   = LRef.current
     const map = mapRef.current
-    if (!L || !map) return
+    if (!mapReady || !L || !map) return
 
     // Clear previous layers
     layersRef.current.forEach(l => l.remove())
@@ -345,14 +361,22 @@ export default function SitePolygonMap({
       // ── Resolve pin position ──────────────────────────────────────────────
       // 1. Explicit lat/lng stored on the site
       // 2. Centroid of the polygon boundary
-      // 3. Evenly-spaced fallback around Gloria center (ensures all pins show)
-      let lat: number = (site as any).latitude  ?? (site as any).lat
-      let lng: number = (site as any).longitude ?? (site as any).lng
+      // 3. Coastal barangay center lookup
+      // 4. Evenly-spaced fallback around Gloria center (ensures all pins show)
+      const rawLat = (site as any).latitude  ?? (site as any).lat
+      const rawLng = (site as any).longitude ?? (site as any).lng
+      let lat = rawLat != null ? Number(rawLat) : NaN
+      let lng = rawLng != null ? Number(rawLng) : NaN
 
-      if (!lat || !lng) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
         const pc = polygonCenter as [number, number] | null
+        const brgyKey = (site.barangay ?? '').trim().toLowerCase()
+        const brgyCoords = BARANGAY_COORDS[brgyKey]
+          ?? Object.entries(BARANGAY_COORDS).find(([k]) => site.name.toLowerCase().includes(k))?.[1]
         if (pc) {
           lat = pc[0]; lng = pc[1]
+        } else if (brgyCoords) {
+          lat = brgyCoords[0]; lng = brgyCoords[1]
         } else {
           const idx   = sites.indexOf(site)
           const angle = (idx / Math.max(sites.length, 1)) * 2 * Math.PI
@@ -383,7 +407,7 @@ export default function SitePolygonMap({
     } else {
       map.setView(GLORIA_CENTER, 13)
     }
-  }, [sites, selectedSiteId, selectedAreaId, onSiteClick]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapReady, sites, selectedSiteId, selectedAreaId, onSiteClick]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cfg = selected ? (STATUS_CONFIG[selected.status] ?? STATUS_CONFIG.active) : null
 

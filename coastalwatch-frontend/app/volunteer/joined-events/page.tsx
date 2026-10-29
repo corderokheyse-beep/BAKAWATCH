@@ -37,7 +37,7 @@ export default function JoinedEventsPage() {
 
   useEffect(() => {
     if (authLoading) return
-    if (!user || user.role !== 'volunteer') { router.replace('/login'); return }
+    if (!user || !['volunteer', 'user', 'public'].includes(user.role)) { router.replace('/login'); return }
     fetchMyRegistrations().then(data => setRecords((data as JoinedRecord[]).filter(record => record.registration_status === 'confirmed' && record.event?.status !== 'cancelled'))).catch(() => setRecords([])).finally(() => setLoading(false))
   }, [authLoading, user, router])
 

@@ -180,8 +180,8 @@ class PlantingEventController extends Controller
             'status'              => $validated['status'] ?? 'upcoming',
         ]);
 
-        // Notify all volunteers and field_workers about the new event
-        $recipients = User::whereIn('role', ['volunteer', 'field_worker'])
+        // Notify all volunteers, community members, and field_workers about the new event
+        $recipients = User::whereIn('role', ['volunteer', 'user', 'field_worker'])
             ->where('is_active', true)
             ->get();
         Notification::send($recipients, new NewPlantingEventNotification($event));

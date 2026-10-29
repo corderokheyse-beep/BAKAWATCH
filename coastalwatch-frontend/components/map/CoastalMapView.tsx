@@ -199,6 +199,7 @@ export default function CoastalMapView({
   const markersRef   = useRef<any[]>([])
   const layersRef    = useRef<any[]>([])
   const focusedRef   = useRef(false) // ensures focus happens only once per mount
+  const [mapReady, setMapReady] = useState(false)
 
   // ── Initial map setup (runs once) ─────────────────────────────────────────
   useEffect(() => {
@@ -289,10 +290,12 @@ export default function CoastalMapView({
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)
       L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map)
+      setMapReady(true)
     })
 
     return () => {
       destroyed = true
+      setMapReady(false)
       try { mapRef.current?.remove() } catch { /* already removed */ }
       mapRef.current = null
       initRef.current = false
@@ -302,7 +305,7 @@ export default function CoastalMapView({
   // ── Re-render markers whenever data changes ───────────────────────────────
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!mapReady || !map) return
 
     import('leaflet').then((L) => {
       // The map may have been removed while this async import resolved.
@@ -378,9 +381,19 @@ export default function CoastalMapView({
             layersRef.current.push(layer)
           })
 
-          const lat = (site as any).latitude  ?? (site as any).lat
-          const lng = (site as any).longitude ?? (site as any).lng
-          if (!lat || !lng) return
+          const rawLat = (site as any).latitude  ?? (site as any).lat
+          const rawLng = (site as any).longitude ?? (site as any).lng
+          let lat = rawLat != null ? Number(rawLat) : NaN
+          let lng = rawLng != null ? Number(rawLng) : NaN
+          if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            const brgyMatch = COASTAL_BARANGAYS.find(
+              b => b.name.toLowerCase() === (site.barangay ?? '').trim().toLowerCase()
+                || site.name.toLowerCase().includes(b.name.toLowerCase())
+            )
+            if (!brgyMatch) return
+            lat = brgyMatch.coords[0]
+            lng = brgyMatch.coords[1]
+          }
 
           const label   = site.barangay ?? site.name.split(' ').slice(0, 2).join(' ')
           const pinIcon = L.divIcon({
@@ -431,11 +444,11 @@ export default function CoastalMapView({
         markersRef.current.push(m)
       })
     })
-  }, [reports, sites, showBarangays, showSites, showMangroveZones, selectedReportId, selectedSiteId]) // eslint-disable-line
+  }, [mapReady, reports, sites, showBarangays, showSites, showMangroveZones, selectedReportId, selectedSiteId]) // eslint-disable-line
 
   // ── Focus on a specific lat/lng once (e.g. navigated from dashboard) ────────
   useEffect(() => {
-    if (!focusLatLng || focusedRef.current) return
+    if (!mapReady || !focusLatLng || focusedRef.current) return
     const map = mapRef.current
     if (!map) return
 

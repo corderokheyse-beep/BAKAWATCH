@@ -151,7 +151,7 @@ function ArticlesContent() {
   const isStaff = user?.role === 'admin' || user?.role === 'staff' || user?.role === 'menro'
 
   useEffect(() => {
-    if (user?.role === 'field_worker' || user?.role === 'volunteer') return
+    if (user?.role === 'field_worker' || user?.role === 'volunteer' || user?.role === 'user') return
     setLoading(true)
     fetchArticles({ category: category || undefined, search: search || undefined })
       .then(data => setArticles(data.data ?? data))
@@ -159,7 +159,7 @@ function ArticlesContent() {
       .finally(() => setLoading(false))
   }, [category, search, user?.role])
 
-  if (user?.role === 'field_worker' || user?.role === 'volunteer') return <TipsGuides />
+  if (user?.role === 'field_worker' || user?.role === 'volunteer' || user?.role === 'user') return <TipsGuides />
 
   return (
     <SidebarLayout title="Articles & Tips" subtitle="Mangrove knowledge and conservation guides">

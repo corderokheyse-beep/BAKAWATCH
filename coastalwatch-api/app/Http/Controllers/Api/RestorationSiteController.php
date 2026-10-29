@@ -207,7 +207,7 @@ class RestorationSiteController extends Controller
             $siteData = DB::selectOne(
                 "SELECT id, name, description, area_hectares, planted_hectares, barangay, status,
                         established_year, latitude, longitude, created_by, assigned_to, created_at, updated_at,
-                        boundary_type, ST_AsGeoJSON(boundary) AS boundary_geojson
+                        boundary_type, COALESCE(ST_AsGeoJSON(boundary), boundary_geojson) AS boundary_geojson
                  FROM restoration_sites WHERE id = ?",
                 [$restorationSite->id]
             );

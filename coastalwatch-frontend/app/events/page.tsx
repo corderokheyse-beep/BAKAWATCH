@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,7 +125,7 @@ function EventsPageInner() {
 
   const canManage = user && (user.role === 'menro' || user.role === 'staff')
   const canConfirm = user?.role === 'field_worker'
-  const canRegister = user?.role === 'volunteer'
+  const canRegister = user?.role === 'volunteer' || user?.role === 'user' || user?.role === 'public'
 
   // â”€â”€ Plantation event requests (menro/staff only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   type RequestStatus = 'pending' | 'approved' | 'rejected'

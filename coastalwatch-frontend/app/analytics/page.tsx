@@ -99,7 +99,7 @@ export default function AnalyticsIndexPage() {
       }).catch(() => setAssignmentError(true)).finally(() => setLoading(false))
       return
     }
-    if (!['menro', 'staff', 'admin', 'denr', 'evaluator', 'volunteer'].includes(user.role)) {
+    if (!['menro', 'staff', 'admin', 'denr', 'evaluator', 'volunteer', 'user'].includes(user.role)) {
       router.replace('/login'); return
     }
     fetchSites().then(setSites).finally(() => setLoading(false))

@@ -35,7 +35,7 @@ export default function VolunteerRequestsPage() {
 
   useEffect(() => {
     if (authLoading) return
-    if (!user || user.role !== 'volunteer') { router.replace('/login'); return }
+    if (!user || !['volunteer', 'user', 'public'].includes(user.role)) { router.replace('/login'); return }
     load()
   }, [authLoading, user, router, load])
 

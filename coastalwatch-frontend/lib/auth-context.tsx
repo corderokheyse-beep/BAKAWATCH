@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isStaff:       user?.role === 'admin' || user?.role === 'staff',
       isMenro:       user?.role === 'menro',
       isFieldWorker: user?.role === 'field_worker',
-      isVolunteer:   user?.role === 'volunteer',
+      isVolunteer:   user?.role === 'volunteer' || user?.role === 'user',
       isDenr:        user?.role === 'denr',
       isEvaluator:   user?.role === 'evaluator',
       homePath:

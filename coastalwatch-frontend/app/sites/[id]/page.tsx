@@ -503,8 +503,8 @@ export default function SiteDetailPage() {
                 editable={canAssign}
                 onBoundarySaved={async () => { setSite(await fetchSite(site.id)) }}
                 center={
-                  (site as any).latitude && (site as any).longitude
-                    ? [(site as any).latitude, (site as any).longitude]
+                  (site as any).latitude != null && (site as any).longitude != null
+                    ? [Number((site as any).latitude), Number((site as any).longitude)]
                     : [12.9330, 121.4800]
                 }
                 zoom={14}

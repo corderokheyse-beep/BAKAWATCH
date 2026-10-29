@@ -83,7 +83,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
   )
 }
 
-const ALLOWED_ANALYTICS_ROLES = ['menro', 'staff', 'admin', 'denr', 'evaluator', 'field_worker', 'volunteer']
+const ALLOWED_ANALYTICS_ROLES = ['menro', 'staff', 'admin', 'denr', 'evaluator', 'field_worker', 'volunteer', 'user']
 
 export default function SiteAnalyticsPage() {
   const { siteId } = useParams<{ siteId: string }>()
