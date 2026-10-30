@@ -16,7 +16,7 @@ import type { RestorationSite, GeneratedReport, Report, ReportType, ReportStatus
 import {
   FileText, AlertTriangle, CheckCircle, XCircle, Clock,
   Download, RefreshCw, Search, X, Eye, Leaf,
-  TreePine,
+  TreePine, Trash2,
   BarChart2, FileDown, History,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -69,11 +69,11 @@ interface ReportPreview {
   }[]
 }
 
-interface ThreatStats { total: number; pending: number; approved: number; rejected: number; investigating: number; resolved: number }
+interface ThreatStats { total: number; pending: number; rejected: number; investigating: number; resolved: number }
 
 const TABS: { key: PageTab; label: string; icon: any }[] = [
   { key: 'generate', label: 'Generate Report', icon: FileText },
-  { key: 'review',   label: 'Pending Reports', icon: AlertTriangle },
+  { key: 'review',   label: 'Manage Reports', icon: AlertTriangle },
   { key: 'history',  label: 'Report History',  icon: History },
 ]
 
@@ -474,6 +474,8 @@ export default function MangroveReportsPage() {
   const [noteText, setNoteText]             = useState('')
   const [stats, setStats]                   = useState<ThreatStats | null>(null)
   const [expandedId, setExpandedId]         = useState<number | null>(null)
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null)
+  const [deletingReportId, setDeletingReportId] = useState<number | null>(null)
 
   // -- History ---------------------------------------------------------------
   const [downloading, setDownloading] = useState<number | null>(null)
@@ -499,25 +501,27 @@ export default function MangroveReportsPage() {
       .catch(() => {})
   }, [user, authLoading, router])
 
+  const loadThreatStats = useCallback(async () => {
+    const [pending, underReview, resolved, total] = await Promise.all([
+      api.get('/reports', { params: { status: 'pending', per_page: 1 } }),
+      api.get('/reports', { params: { status: 'under_review', per_page: 1 } }),
+      api.get('/reports', { params: { status: 'resolved', per_page: 1 } }),
+      api.get('/reports', { params: { per_page: 1 } }),
+    ])
+    setStats({
+      pending: pending.data.total,
+      investigating: underReview.data.total,
+      resolved: resolved.data.total,
+      rejected: 0,
+      total: total.data.total,
+    })
+  }, [])
+
   // -- Load threat stats -----------------------------------------------------
   useEffect(() => {
     if (!user || (user.role !== 'menro' && user.role !== 'staff')) return
-    Promise.all([
-      api.get('/reports', { params: { status: 'pending',       per_page: 1 } }),
-      api.get('/reports', { params: { status: 'under_review', per_page: 1 } }),
-      api.get('/reports', { params: { status: 'resolved',      per_page: 1 } }),
-      api.get('/reports', { params: { per_page: 1 } }),
-    ]).then(([p, inv, res, t]) => {
-      setStats({
-        pending:       p.data.total,
-        investigating: inv.data.total,
-        resolved:      res.data.total,
-        approved:      res.data.total,
-        rejected:      0,
-        total:         t.data.total,
-      })
-    }).catch(() => {})
-  }, [user])
+    loadThreatStats().catch(() => toast.error('Failed to load report counts.'))
+  }, [user, loadThreatStats])
 
   // -- Load review queue -----------------------------------------------------
   const loadThreats = useCallback(async () => {
@@ -552,6 +556,29 @@ export default function MangroveReportsPage() {
       setReportHistoryLoading(false)
     }
   }, [reportHistoryPage])
+
+  const deleteReport = async () => {
+    if (!reportToDelete) return
+    const deletedId = reportToDelete.id
+    setDeletingReportId(deletedId)
+    try {
+      await api.delete(`/reports/${deletedId}`)
+      setReportToDelete(null)
+      setExpandedId(current => current === deletedId ? null : current)
+      toast.success('Report deleted.')
+      if (threats?.data.length === 1 && threats.current_page > 1) {
+        setThreatPage(page => page - 1)
+      } else {
+        await loadThreats()
+      }
+      if (reportHistory) await loadReportHistory()
+      await loadThreatStats()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? 'Could not delete the report.')
+    } finally {
+      setDeletingReportId(null)
+    }
+  }
 
   useEffect(() => {
     if (tab === 'review' && user && (user.role === 'menro' || user.role === 'staff')) {
@@ -844,15 +871,7 @@ export default function MangroveReportsPage() {
         const label = status.replace('_', ' ')
         toast.success(`Report marked as ${label}.`)
         loadThreats()
-        Promise.all([
-          api.get('/reports', { params: { status: 'pending',       per_page: 1 } }),
-          api.get('/reports', { params: { status: 'under_review', per_page: 1 } }),
-          api.get('/reports', { params: { status: 'resolved',      per_page: 1 } }),
-          api.get('/reports', { params: { per_page: 1 } }),
-        ]).then(([p, inv, res, t]) => setStats({
-          pending: p.data.total, investigating: inv.data.total, resolved: res.data.total,
-          approved: res.data.total, rejected: 0, total: t.data.total,
-        })).catch(() => {})
+        loadThreatStats().catch(() => toast.error('Report status updated, but report counts could not be refreshed.'))
       })
       .catch(() => toast.error('Failed to update report.'))
       .finally(() => setReviewingId(null))
@@ -884,15 +903,7 @@ export default function MangroveReportsPage() {
       setNoteText('')
       loadThreats()
       // Refresh stats
-      Promise.all([
-        api.get('/reports', { params: { status: 'pending',       per_page: 1 } }),
-        api.get('/reports', { params: { status: 'under_review', per_page: 1 } }),
-        api.get('/reports', { params: { status: 'resolved',      per_page: 1 } }),
-        api.get('/reports', { params: { per_page: 1 } }),
-      ]).then(([p, inv, res, t]) => setStats({
-        pending: p.data.total, investigating: inv.data.total, resolved: res.data.total,
-        approved: res.data.total, rejected: 0, total: t.data.total,
-      })).catch(() => {})
+      loadThreatStats().catch(() => toast.error('Report status updated, but report counts could not be refreshed.'))
     } catch { toast.error('Review failed.') }
     finally { setReviewingId(null) }
   }
@@ -931,7 +942,7 @@ export default function MangroveReportsPage() {
             <StatCard title="Total Reports"   value={stats.total}         icon={FileText}    color="text-blue-600"   bgColor="bg-blue-50"   accentClass="border-l-4 border-blue-400" />
             <StatCard title="Pending"         value={stats.pending}       icon={Clock}       color="text-amber-600"  bgColor="bg-amber-50"  accentClass="border-l-4 border-amber-400" />
             <StatCard title="Under Review"   value={stats.investigating}              icon={Eye}         color="text-blue-600"   bgColor="bg-blue-50"   accentClass="border-l-4 border-blue-500" />
-            <StatCard title="Resolved"        value={stats.approved + stats.resolved}  icon={CheckCircle} color="text-green-600"  bgColor="bg-green-50"  accentClass="border-l-4 border-green-400" />
+            <StatCard title="Resolved"        value={stats.resolved}  icon={CheckCircle} color="text-green-600"  bgColor="bg-green-50"  accentClass="border-l-4 border-green-400" />
             <StatCard title="Rejected"        value={stats.rejected}      icon={XCircle}     color="text-red-600"    bgColor="bg-red-50"    accentClass="border-l-4 border-red-400" />
           </div>
         )}
@@ -1427,7 +1438,7 @@ export default function MangroveReportsPage() {
                     <option value="pending">Pending</option>
                     <option value="under_review">Under Review</option>
                     <option value="resolved">Resolved</option>
-                    <option value="resolved">Resolved</option>
+                    <option value="rejected">Rejected</option>
                   </select>
                   <select className="input w-36" value={threatCategory}
                     onChange={e => { setThreatCategory(e.target.value); setThreatPage(1) }}>
@@ -1530,6 +1541,14 @@ export default function MangroveReportsPage() {
                                       className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors disabled:opacity-30"
                                       title="Mark Resolved">
                                       <CheckCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => setReportToDelete(r)}
+                                      disabled={deletingReportId === r.id}
+                                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30"
+                                      title="Delete report"
+                                      aria-label={`Delete report: ${r.title}`}>
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </>}
                                 </div>
@@ -1807,6 +1826,41 @@ export default function MangroveReportsPage() {
                   </>
                 )
               })()}
+            </div>
+          </div>
+        )}
+
+        {reportToDelete && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-report-title"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="px-5 py-4 border-b border-red-100 bg-red-50">
+                <h2 id="delete-report-title" className="font-bold text-sm text-red-900">Delete report permanently?</h2>
+                <p className="text-xs text-gray-600 mt-1">{reportToDelete.title}</p>
+              </div>
+              <div className="p-5">
+                <p className="text-sm text-gray-600">This removes the report from the system and updates the report totals.</p>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setReportToDelete(null)}
+                    disabled={deletingReportId !== null}
+                    className="btn-secondary flex-1">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteReport}
+                    disabled={deletingReportId !== null}
+                    className="btn-danger flex-1">
+                    {deletingReportId !== null ? 'Deleting…' : 'Delete Report'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
