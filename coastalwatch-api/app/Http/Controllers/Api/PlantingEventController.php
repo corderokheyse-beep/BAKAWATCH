@@ -12,8 +12,10 @@ use App\Notifications\EventRegistrationConfirmedNotification;
 use App\Notifications\EventRegistrationSubmittedNotification;
 use App\Notifications\EventUpdatedNotification;
 use App\Notifications\NewPlantingEventNotification;
+use App\Services\EventSeedlingDispatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
 class PlantingEventController extends Controller
@@ -214,7 +216,16 @@ class PlantingEventController extends Controller
             }
         }
 
-        $plantingEvent->update($validated);
+        DB::transaction(function () use ($validated, $plantingEvent, $oldStatus, $request) {
+            $plantingEvent->update($validated);
+            if (($validated['status'] ?? null) === 'cancelled' && $oldStatus !== 'cancelled' && $plantingEvent->is_from_request) {
+                app(EventSeedlingDispatchService::class)->returnUnused(
+                    $plantingEvent,
+                    $request->user(),
+                    "Unused seedlings returned after cancellation of event #{$plantingEvent->id}.",
+                );
+            }
+        });
 
         // Get all registrants with a user account
         $registrations = EventRegistration::with('user')

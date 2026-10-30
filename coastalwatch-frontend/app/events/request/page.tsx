@@ -26,6 +26,7 @@ interface FormData {
   preferred_location: string
   preferred_restoration_site_id: string
   target_species: number[]
+  seedling_quantities: Record<string, string>
   expected_participants: string
   seedlings_requested: string
   purpose: string
@@ -34,7 +35,7 @@ interface FormData {
 const empty = (): FormData => ({
   organization_name: '', contact_person: '', contact_email: '', contact_phone: '', contact_address: '',
   event_name: '', description: '', preferred_date: '', preferred_location: '',
-  preferred_restoration_site_id: '', target_species: [], expected_participants: '', seedlings_requested: '', purpose: '',
+  preferred_restoration_site_id: '', target_species: [], seedling_quantities: {}, expected_participants: '', seedlings_requested: '', purpose: '',
 })
 
 export default function EventRequestPage() {
@@ -47,16 +48,18 @@ export default function EventRequestPage() {
   const [sites, setSites] = useState<RestorationSite[]>([])
   const [species, setSpecies] = useState<MangroveSpecies[]>([])
   const [seedlingAvailability, setSeedlingAvailability] = useState<SeedlingAvailability[]>([])
-  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilityLoading, setAvailabilityLoading] = useState(true)
   const [availabilityError, setAvailabilityError] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
 
-  const loadSeedlingAvailability = useCallback(async () => {
+  const loadSeedlingAvailability = useCallback(async (siteId?: string) => {
     setAvailabilityLoading(true)
     setAvailabilityError('')
     try {
-      const { data } = await api.get<SeedlingAvailability[]>('/seedlings/availability')
+      const { data } = await api.get<SeedlingAvailability[]>('/seedlings/availability', {
+        params: siteId ? { restoration_site_id: siteId } : undefined,
+      })
       setSeedlingAvailability(Array.isArray(data) ? data : [])
     } catch {
       setAvailabilityError('Current seedling availability could not be loaded.')
@@ -71,21 +74,30 @@ export default function EventRequestPage() {
     setMinDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`)
     fetchSites().then(setSites).catch(() => {})
     fetchSpecies().then(setSpecies).catch(() => {})
-    loadSeedlingAvailability()
     const requestedEditId = Number(new URLSearchParams(window.location.search).get('edit'))
     if (requestedEditId) {
       api.get('/event-requests/mine').then(({ data }) => {
         const request = (Array.isArray(data) ? data : data?.data ?? []).find((row: any) => Number(row.id) === requestedEditId)
         if (!request || request.status !== 'pending') { toast.error('Only your pending requests can be edited.'); return }
         setEditingId(request.id)
+        const targetSpecies = (request.target_species ?? []).map(Number)
+        const seedlingQuantities = request.seedling_quantities ?? (
+          targetSpecies.length && request.seedlings_requested
+            ? { [targetSpecies[0]]: String(request.seedlings_requested) }
+            : {}
+        )
         setForm({
           organization_name: request.organization_name ?? '', contact_person: request.contact_person ?? '', contact_email: request.contact_email ?? '', contact_phone: request.contact_phone ?? '', contact_address: request.contact_address ?? '',
           event_name: request.event_name ?? '', description: request.description ?? '', preferred_date: request.preferred_date?.slice(0, 10) ?? '', preferred_location: request.preferred_location ?? '',
-          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: (request.target_species ?? []).map(Number), expected_participants: String(request.expected_participants ?? ''), seedlings_requested: String(request.seedlings_requested ?? ''), purpose: request.purpose ?? '',
+          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: targetSpecies, seedling_quantities: Object.fromEntries(Object.entries(seedlingQuantities).map(([id, quantity]) => [id, String(quantity)])), expected_participants: String(request.expected_participants ?? ''), seedlings_requested: String(request.seedlings_requested ?? ''), purpose: request.purpose ?? '',
         })
       }).catch(() => toast.error('Could not load this event request for editing.'))
     }
   }, [loadSeedlingAvailability])
+
+  useEffect(() => {
+    loadSeedlingAvailability(form.preferred_restoration_site_id || undefined)
+  }, [form.preferred_restoration_site_id, loadSeedlingAvailability])
 
   // Pre-fill contact info from logged-in user
   useEffect(() => {
@@ -110,7 +122,10 @@ export default function EventRequestPage() {
     const matches = seedlingAvailability.filter(
       entry => speciesNames.has(entry.species_name.trim().toLowerCase()),
     )
-    return matches.reduce((total, entry) => total + Math.max(0, Number(entry.total_remaining) || 0), 0)
+    return matches.reduce((total, entry) => total + Math.max(
+      0,
+      Number(form.preferred_restoration_site_id ? entry.eligible_remaining : entry.total_remaining) || 0,
+    ), 0)
   }
 
   const selectedSpecies = species.filter(item => form.target_species.includes(item.id))
@@ -121,6 +136,53 @@ export default function EventRequestPage() {
   const availableSeedlings = selectedSpecies.length
     ? selectedSpecies.reduce((total, item) => total + availableForSpecies(item), 0)
     : totalSeedlingsAvailable
+  const requestedSeedlings = Object.values(form.seedling_quantities).reduce(
+    (total, quantity) => total + (Number.parseInt(quantity, 10) || 0),
+    0,
+  )
+
+  const toggleTargetSpecies = (item: MangroveSpecies, checked: boolean) => {
+    setForm(current => {
+      if (checked && availableForSpecies(item) < 1) return current
+      const target_species = checked
+        ? [...current.target_species, item.id]
+        : current.target_species.filter(id => id !== item.id)
+      const seedling_quantities = { ...current.seedling_quantities }
+      if (checked) seedling_quantities[item.id] = seedling_quantities[item.id] || '1'
+      else delete seedling_quantities[item.id]
+      return { ...current, target_species, seedling_quantities }
+    })
+  }
+
+  // Automatically prune out-of-stock species or clamp quantities when site availability updates
+  useEffect(() => {
+    if (availabilityLoading || !species.length || !seedlingAvailability.length) return
+    setForm(current => {
+      let changed = false
+      const nextTargetSpecies: number[] = []
+      const nextQuantities: Record<string, string> = {}
+      for (const id of current.target_species) {
+        const item = species.find(s => s.id === id)
+        if (!item) continue
+        const available = availableForSpecies(item)
+        if (available > 0) {
+          nextTargetSpecies.push(id)
+          const currentQty = Number.parseInt(current.seedling_quantities[id] || '1', 10) || 1
+          const clampedQty = Math.min(currentQty, available)
+          nextQuantities[id] = String(clampedQty)
+          if (clampedQty !== currentQty) changed = true
+        } else {
+          changed = true
+        }
+      }
+      if (!changed && nextTargetSpecies.length === current.target_species.length) return current
+      return {
+        ...current,
+        target_species: nextTargetSpecies,
+        seedling_quantities: nextQuantities,
+      }
+    })
+  }, [seedlingAvailability, species, availabilityLoading])
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}
@@ -134,8 +196,17 @@ export default function EventRequestPage() {
     if (!form.preferred_date)           errs.preferred_date    = 'Preferred date is required.'
     if (!form.expected_participants || Number(form.expected_participants) < 1)
       errs.expected_participants = 'Enter the expected number of participants.'
-    if (!form.seedlings_requested || !Number.isInteger(Number(form.seedlings_requested)) || Number(form.seedlings_requested) < 1)
-      errs.seedlings_requested = 'Enter the number of seedlings requested.'
+    if (requestedSeedlings < 1)
+      errs.seedlings_requested = 'Enter a positive quantity for at least one selected species.'
+    for (const id of form.target_species) {
+      const quantity = Number(form.seedling_quantities[id])
+      const item = species.find(candidate => candidate.id === id)
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        errs.seedlings_requested = 'Enter a whole-number quantity for each selected species.'
+      } else if (item && quantity > availableForSpecies(item)) {
+        errs.seedlings_requested = `${item.local_name || item.scientific_name} has only ${availableForSpecies(item).toLocaleString()} seedlings available for this site.`
+      }
+    }
     if (!form.preferred_restoration_site_id) errs.preferred_restoration_site_id = 'Choose a restoration site.'
     if (!form.target_species.length) errs.target_species = 'Choose at least one target species.'
     setErrors(errs)
@@ -154,7 +225,10 @@ export default function EventRequestPage() {
       const payload = {
         ...form,
         expected_participants: Number(form.expected_participants),
-        seedlings_requested: Number(form.seedlings_requested),
+        seedlings_requested: requestedSeedlings,
+        seedling_quantities: Object.fromEntries(
+          Object.entries(form.seedling_quantities).map(([id, quantity]) => [id, Number(quantity)]),
+        ),
         preferred_restoration_site_id: Number(form.preferred_restoration_site_id),
         target_species: form.target_species,
       }
@@ -246,7 +320,7 @@ export default function EventRequestPage() {
             </p>
           )}
           {availabilityError
-            ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-red-700"><span>{availabilityError}</span><button type="button" onClick={loadSeedlingAvailability} className="font-semibold underline">Retry</button></div>
+            ? <div className="mt-2 flex items-center justify-between gap-2 text-xs text-red-700"><span>{availabilityError}</span><button type="button" onClick={() => loadSeedlingAvailability(form.preferred_restoration_site_id || undefined)} className="font-semibold underline">Retry</button></div>
             : <p className="mt-2 text-[11px] text-emerald-700">This total updates as seedlings are planted, lost, or added to inventory.</p>}
         </div>
 
@@ -349,10 +423,9 @@ export default function EventRequestPage() {
               </div>
               <div>
                 <label className="label">Seedlings Requested *</label>
-                <input type="number" min={1} step={1} className={cn('input', errors.seedlings_requested && 'border-red-400')}
-                  placeholder="e.g. 100"
-                  value={form.seedlings_requested} onChange={set('seedlings_requested')}
-                  suppressHydrationWarning />
+                <input type="number" min={1} step={1} className={cn('input bg-gray-50', errors.seedlings_requested && 'border-red-400')}
+                  value={requestedSeedlings} readOnly aria-readonly="true" />
+                <p className="mt-1 text-xs text-gray-500">Calculated from the species quantities below.</p>
                 {errors.seedlings_requested && <p className="text-xs text-red-500 mt-1">{errors.seedlings_requested}</p>}
               </div>
             </div>
@@ -366,7 +439,37 @@ export default function EventRequestPage() {
 
             <div>
               <label className="label">Target Mangrove Species *</label>
-              <div className="mt-1 grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">{species.map(item => <label key={item.id} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg p-2 text-sm text-gray-700 transition hover:bg-emerald-50"><span className="flex items-center gap-2"><input type="checkbox" checked={form.target_species.includes(item.id)} onChange={e => setForm(f => ({ ...f, target_species: e.target.checked ? [...f.target_species, item.id] : f.target_species.filter(id => id !== item.id) }))} />{item.local_name ?? item.scientific_name} <em className="text-xs text-gray-500">{item.scientific_name}</em></span><span className="shrink-0 text-[11px] text-emerald-700">{availableForSpecies(item).toLocaleString()} available</span></label>)}</div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
+              <div className="mt-1 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">
+                {species.map(item => {
+                  const available = availableForSpecies(item)
+                  const selected = form.target_species.includes(item.id)
+                  const disabled = availabilityLoading || Boolean(availabilityError) || available < 1
+                  return <div key={item.id} className={cn('rounded-lg border p-3', disabled ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-100 hover:border-emerald-200')}>
+                    <label className={cn('flex items-start gap-2 text-sm', disabled ? 'cursor-not-allowed text-gray-400' : 'cursor-pointer text-gray-700')}>
+                      <input type="checkbox" checked={selected} disabled={disabled} onChange={e => toggleTargetSpecies(item, e.target.checked)} />
+                      <span className="min-w-0 flex-1">{item.local_name ?? item.scientific_name} <em className="block text-xs text-gray-500">{item.scientific_name}</em></span>
+                      <span className={cn('shrink-0 text-[11px] font-medium', available > 0 ? 'text-emerald-700' : 'text-red-600')}>
+                        {availabilityLoading ? 'Checking…' : available > 0 ? `${available.toLocaleString()} available` : 'Out of stock'}
+                      </span>
+                    </label>
+                    {selected && <label className="mt-2 block text-xs font-medium text-gray-600">
+                      Quantity requested <span className="font-normal text-gray-400">(max {available.toLocaleString()})</span>
+                      <input type="number" min={1} max={available} step={1} className="input mt-1 py-2"
+                        value={form.seedling_quantities[item.id] ?? ''}
+                        onChange={e => {
+                          const val = e.target.value
+                          if (val === '') {
+                            setForm(current => ({ ...current, seedling_quantities: { ...current.seedling_quantities, [item.id]: '' } }))
+                            return
+                          }
+                          const num = Math.min(available, Math.max(1, Number.parseInt(val, 10) || 1))
+                          setForm(current => ({ ...current, seedling_quantities: { ...current.seedling_quantities, [item.id]: String(num) } }))
+                        }}
+                        disabled={disabled} />
+                    </label>}
+                  </div>
+                })}
+              </div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
             </div>
 
             <div>
@@ -449,8 +552,24 @@ export default function EventRequestPage() {
                     <Row k="Preferred Site" v={selectedSite?.name ?? form.preferred_location ?? '—'} />
                     <Row k="Preferred Date" v={form.preferred_date} />
                     <Row k="Participants" v={`${form.expected_participants} expected`} />
-                    <Row k="Seedlings Requested" v={Number(form.seedlings_requested).toLocaleString()} />
-                    <Row k="Available Seedlings" v={availableSeedlings.toLocaleString()} />
+                    <Row k="Seedlings Requested" v={
+                      <div>
+                        <span className="font-semibold text-emerald-800">{requestedSeedlings.toLocaleString()} total</span>
+                        <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
+                          {form.target_species.map(id => {
+                            const item = species.find(s => s.id === id)
+                            const qty = Number(form.seedling_quantities[id] || 0)
+                            return (
+                              <li key={id} className="flex justify-between gap-3">
+                                <span>{item?.local_name || item?.scientific_name}:</span>
+                                <span className="font-medium text-gray-800">{qty.toLocaleString()}</span>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </div>
+                    } />
+                    <Row k="Available Seedlings" v={`${availableSeedlings.toLocaleString()} for selected species`} />
                     <Row k="Contact Person" v={form.contact_person} />
                     <Row k="Contact Info" v={`${form.contact_email} · ${form.contact_phone}`} />
                   </>

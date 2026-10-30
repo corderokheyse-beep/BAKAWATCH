@@ -13,7 +13,7 @@ class PlantationEventRequest extends Model
         'requester_id', 'contact_address', 'preferred_restoration_site_id', 'target_species',
         'organization_name', 'contact_person', 'contact_email', 'contact_phone',
         'event_name', 'description', 'preferred_date', 'preferred_location',
-        'expected_participants', 'seedlings_requested', 'purpose',
+        'expected_participants', 'seedlings_requested', 'seedling_quantities', 'purpose',
         'status', 'admin_notes', 'reviewed_by', 'reviewed_at', 'planting_event_id',
     ];
 
@@ -21,6 +21,7 @@ class PlantationEventRequest extends Model
         'preferred_date' => 'date',
         'reviewed_at'    => 'datetime',
         'target_species'  => 'array',
+        'seedling_quantities' => 'array',
     ];
 
     public function reviewer()
@@ -31,6 +32,11 @@ class PlantationEventRequest extends Model
     public function plantingEvent()
     {
         return $this->hasOne(PlantingEvent::class, 'source_request_id');
+    }
+
+    public function seedlingAllocations()
+    {
+        return $this->hasMany(EventSeedlingAllocation::class);
     }
 
     public function preferredSite()

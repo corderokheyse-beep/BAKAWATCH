@@ -133,10 +133,22 @@ function EventsPageInner() {
     id: number; organization_name: string; contact_person: string
     contact_email: string; contact_phone?: string; event_name: string
     description?: string; preferred_date: string; preferred_location?: string
-    expected_participants: number; seedlings_requested: number; purpose?: string
+    preferred_restoration_site_id?: number
+    expected_participants: number; seedlings_requested: number; seedling_quantities?: Record<string, number>; purpose?: string
     status: RequestStatus; admin_notes?: string
     reviewed_by?: number; reviewed_at?: string
     reviewer?: { id: number; name: string }
+    planting_event?: {
+      id: number
+      restoration_site_id?: number
+      status?: string
+      seedling_allocations?: Array<{
+        mangrove_species_id: number
+        dispatched_quantity: number
+        planted_quantity: number
+        returned_quantity: number
+      }>
+    } | null
     created_at: string
   }
 
@@ -161,6 +173,11 @@ function EventsPageInner() {
   const [reviewModal, setReviewModal]     = useState<{ req: EventRequest; action: RequestStatus } | null>(null)
   const [reviewNote, setReviewNote]       = useState('')
   const [reviewing, setReviewing]         = useState<number | null>(null)
+  const [dispatchModal, setDispatchModal] = useState<EventRequest | null>(null)
+  const [dispatchQuantities, setDispatchQuantities] = useState<Record<string, string>>({})
+  const [dispatchSiteStock, setDispatchSiteStock] = useState<Record<number, number>>({})
+  const [loadingDispatchStock, setLoadingDispatchStock] = useState(false)
+  const [dispatching, setDispatching] = useState<number | null>(null)
   // Pre-expand the request from the URL if provided
   const [expandedReqId, setExpandedReqId] = useState<number | null>(
     urlRequestId ? Number(urlRequestId) : null
@@ -402,6 +419,114 @@ function EventsPageInner() {
     } catch { toast.error('Review failed.') }
     finally { setReviewing(null) }
   }
+
+  const openDispatchModal = async (req: EventRequest) => {
+    const alreadyDispatched = new Map<number, number>()
+    for (const allocation of req.planting_event?.seedling_allocations ?? []) {
+      alreadyDispatched.set(
+        allocation.mangrove_species_id,
+        (alreadyDispatched.get(allocation.mangrove_species_id) ?? 0) + allocation.dispatched_quantity,
+      )
+    }
+    const quantities = Object.fromEntries(
+      Object.entries(req.seedling_quantities ?? {}).map(([speciesId, requested]) => [
+        speciesId,
+        String(Math.max(0, Number(requested) - (alreadyDispatched.get(Number(speciesId)) ?? 0))),
+      ]),
+    )
+    setDispatchQuantities(quantities)
+    setDispatchModal(req)
+    setLoadingDispatchStock(true)
+    try {
+      const siteId = req.planting_event?.restoration_site_id ?? req.preferred_restoration_site_id
+      const { data } = await api.get('/seedlings/availability', {
+        params: siteId ? { restoration_site_id: siteId } : undefined,
+      })
+      const availabilityList = Array.isArray(data) ? data : []
+      const stockMap: Record<number, number> = {}
+      for (const speciesIdStr of Object.keys(req.seedling_quantities ?? {})) {
+        const spId = Number(speciesIdStr)
+        const sp = speciesOptions.find(item => item.id === spId)
+        if (sp) {
+          const speciesNames = new Set(
+            [sp.scientific_name, sp.local_name]
+              .filter((name): name is string => Boolean(name?.trim()))
+              .map(name => name.trim().toLowerCase()),
+          )
+          const matches = availabilityList.filter(entry => speciesNames.has(entry.species_name.trim().toLowerCase()))
+          stockMap[spId] = matches.reduce((sum, entry) => sum + Math.max(0, Number(siteId ? entry.eligible_remaining : entry.total_remaining) || 0), 0)
+        }
+      }
+      setDispatchSiteStock(stockMap)
+    } catch {
+      // Non-blocking; server validates stock upon submission
+    } finally {
+      setLoadingDispatchStock(false)
+    }
+  }
+
+  const submitDispatch = async () => {
+    if (!dispatchModal) return
+    const quantities = Object.fromEntries(
+      Object.entries(dispatchQuantities)
+        .filter(([, quantity]) => Number(quantity) > 0)
+        .map(([speciesId, quantity]) => [speciesId, Number(quantity)]),
+    )
+    if (Object.keys(quantities).length === 0) {
+      toast.error('Enter at least one species quantity to dispatch.')
+      return
+    }
+
+    // Check for shortages against loaded site stock
+    for (const [speciesId, qty] of Object.entries(quantities)) {
+      const spId = Number(speciesId)
+      const stock = dispatchSiteStock[spId]
+      if (stock !== undefined && qty > stock) {
+        const speciesItem = speciesOptions.find(item => item.id === spId)
+        const name = speciesItem?.local_name || speciesItem?.scientific_name || `Species #${spId}`
+        toast.error(`Cannot dispatch: ${name} has only ${stock.toLocaleString()} seedlings available at this site (shortage of ${(qty - stock).toLocaleString()}).`)
+        return
+      }
+    }
+
+    setDispatching(dispatchModal.id)
+    try {
+      const { data } = await api.post(`/event-requests/${dispatchModal.id}/dispatch`, { quantities })
+      toast.success(data.message ?? 'Seedlings dispatched to the event.')
+      setDispatchModal(null)
+      await loadRequests()
+    } catch (error: any) {
+      const errors = error?.response?.data?.errors
+      toast.error(errors ? Object.values(errors).flat().join(' ') : error?.response?.data?.message ?? 'Could not dispatch seedlings.')
+    } finally {
+      setDispatching(null)
+    }
+  }
+
+  const returnDispatch = async (req: EventRequest) => {
+    if (!confirm(`Return all unused dispatched seedlings from "${req.event_name}" to inventory?`)) return
+    setDispatching(req.id)
+    try {
+      const { data } = await api.post(`/event-requests/${req.id}/return`)
+      toast.success(data.message ?? 'Unused seedlings returned.')
+      await loadRequests()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? 'Could not return seedlings.')
+    } finally {
+      setDispatching(null)
+    }
+  }
+
+  const hasDispatchRemaining = (req: EventRequest) => Object.entries(req.seedling_quantities ?? {}).some(([speciesId, requested]) => {
+    const dispatched = (req.planting_event?.seedling_allocations ?? [])
+      .filter(allocation => allocation.mangrove_species_id === Number(speciesId))
+      .reduce((sum, allocation) => sum + allocation.dispatched_quantity, 0)
+    return dispatched < Number(requested)
+  })
+
+  const hasUnusedDispatch = (req: EventRequest) => ['completed', 'cancelled'].includes(req.planting_event?.status ?? '')
+    && (req.planting_event?.seedling_allocations ?? [])
+      .some(allocation => allocation.dispatched_quantity > allocation.planted_quantity + allocation.returned_quantity)
 
   // ── Registration ──────────────────────────────────────────────────────────
   const handleRegister = async (event: PlantingEvent) => {
@@ -1103,6 +1228,24 @@ function EventsPageInner() {
                                 title="View details">
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
+                              {req.status === 'approved' && req.planting_event && hasDispatchRemaining(req) && (
+                                <button
+                                  onClick={() => openDispatchModal(req)}
+                                  disabled={dispatching === req.id}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                                  title="Dispatch requested seedlings">
+                                  <Send className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {req.status === 'approved' && hasUnusedDispatch(req) && (
+                                <button
+                                  onClick={() => returnDispatch(req)}
+                                  disabled={dispatching === req.id}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                                  title="Return unused seedlings">
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               {req.status !== 'approved' && (
                                 <button
                                   onClick={() => { setReviewModal({ req, action: 'approved' }); setReviewNote('') }}
@@ -1187,6 +1330,20 @@ function EventsPageInner() {
                                     <div className="flex items-center gap-2 text-gray-600">
                                       <TreePine className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                                       {req.seedlings_requested.toLocaleString()} seedlings requested
+                                    </div>
+                                    <div className="mt-2 border-t border-gray-100 pt-2">
+                                      <p className="text-xs font-semibold text-gray-600">Requested by species</p>
+                                      {Object.entries(req.seedling_quantities ?? {}).map(([speciesId, quantity]) => {
+                                        const speciesItem = speciesOptions.find(item => item.id === Number(speciesId))
+                                        const allocations = (req.planting_event?.seedling_allocations ?? [])
+                                          .filter(allocation => allocation.mangrove_species_id === Number(speciesId))
+                                        const dispatched = allocations.reduce((sum, allocation) => sum + allocation.dispatched_quantity, 0)
+                                        const planted = allocations.reduce((sum, allocation) => sum + allocation.planted_quantity, 0)
+                                        const returned = allocations.reduce((sum, allocation) => sum + allocation.returned_quantity, 0)
+                                        return <p key={speciesId} className="mt-1 text-xs text-gray-600">
+                                          {speciesItem?.local_name || speciesItem?.scientific_name || `Species #${speciesId}`}: {Number(quantity).toLocaleString()} requested · {dispatched.toLocaleString()} dispatched · {planted.toLocaleString()} planted · {returned.toLocaleString()} returned
+                                        </p>
+                                      })}
                                     </div>
                                   </div>
                                 </div>
@@ -1597,6 +1754,67 @@ function EventsPageInner() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {dispatchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <header className="border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+              <h2 className="font-bold text-emerald-900">Dispatch seedlings</h2>
+              <p className="mt-1 text-sm text-gray-600">{dispatchModal.event_name} · confirm quantity by species</p>
+            </header>
+            <div className="max-h-[60vh] space-y-3 overflow-y-auto p-5">
+              {Object.entries(dispatchModal.seedling_quantities ?? {}).map(([speciesId, requested]) => {
+                const dispatched = (dispatchModal.planting_event?.seedling_allocations ?? [])
+                  .filter(allocation => allocation.mangrove_species_id === Number(speciesId))
+                  .reduce((sum, allocation) => sum + allocation.dispatched_quantity, 0)
+                const remaining = Math.max(0, Number(requested) - dispatched)
+                const speciesItem = speciesOptions.find(item => item.id === Number(speciesId))
+                const stock = dispatchSiteStock[Number(speciesId)]
+                const toDispatch = Number(dispatchQuantities[speciesId] ?? '0')
+                const hasShortage = stock !== undefined && toDispatch > stock
+
+                return <div key={speciesId} className={cn('rounded-xl border p-3 text-sm', hasShortage ? 'border-red-300 bg-red-50/50' : 'border-gray-200')}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-gray-800">{speciesItem?.local_name || speciesItem?.scientific_name || `Species #${speciesId}`}</span>
+                    <span className={cn('text-xs font-medium', stock !== undefined && stock < 1 ? 'text-red-600' : 'text-emerald-700')}>
+                      {loadingDispatchStock ? 'Checking stock…' : stock !== undefined ? `${stock.toLocaleString()} available at site` : ''}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    Requested: {Number(requested).toLocaleString()} · Dispatched so far: {dispatched.toLocaleString()} · Undispatched: {remaining.toLocaleString()}
+                  </div>
+                  <label className="mt-2 block">
+                    <span className="text-xs font-medium text-gray-700">Dispatch quantity:</span>
+                    <input type="number" min={0} max={remaining} step={1} className={cn('input mt-1', hasShortage && 'border-red-400 focus:border-red-400')}
+                      value={dispatchQuantities[speciesId] ?? '0'}
+                      onChange={event => setDispatchQuantities(current => ({ ...current, [speciesId]: event.target.value }))}
+                      disabled={remaining < 1} />
+                  </label>
+                  {hasShortage && (
+                    <p className="mt-1.5 text-xs font-semibold text-red-600">
+                      ⚠️ Stock shortage: cannot dispatch {toDispatch.toLocaleString()} seedlings because only {stock.toLocaleString()} are available at this site.
+                    </p>
+                  )}
+                </div>
+              })}
+            </div>
+            <footer className="flex gap-3 border-t border-gray-100 p-5">
+              {(() => {
+                const anyShortage = Object.entries(dispatchQuantities).some(([spId, qty]) => {
+                  const stock = dispatchSiteStock[Number(spId)]
+                  return stock !== undefined && Number(qty) > stock
+                })
+                return (
+                  <button onClick={submitDispatch} disabled={dispatching === dispatchModal.id || anyShortage} className="btn-primary flex-1 justify-center disabled:opacity-50">
+                    {dispatching === dispatchModal.id ? 'Dispatching…' : 'Confirm dispatch'}
+                  </button>
+                )
+              })()}
+              <button onClick={() => setDispatchModal(null)} disabled={dispatching === dispatchModal.id} className="btn-secondary">Cancel</button>
+            </footer>
+          </section>
         </div>
       )}
 

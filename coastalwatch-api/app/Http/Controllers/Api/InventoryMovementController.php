@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 class InventoryMovementController extends Controller
 {
     /** Movement types that always remove stock (quantity stored negative). */
-    private const OUTFLOW = ['planted_out', 'lost'];
+    private const OUTFLOW = ['dispatch_out', 'planted_out', 'lost'];
 
     /** List the movement history for one inventory entry, newest first. */
     public function index(SeedlingInventory $seedlingInventory): JsonResponse
@@ -45,7 +45,7 @@ class InventoryMovementController extends Controller
     public function store(Request $request, SeedlingInventory $seedlingInventory): JsonResponse
     {
         $validated = $request->validate([
-            'type'          => 'required|in:' . implode(',', InventoryMovement::TYPES),
+            'type'          => 'required|in:stock_in,planted_out,lost,adjustment',
             'quantity'      => 'required|integer|not_in:0',
             'movement_date' => 'nullable|date',
             'note'          => 'nullable|string|max:500',
@@ -148,6 +148,8 @@ class InventoryMovementController extends Controller
         return response()->json([
             'period'        => $period,
             'stock_in'      => abs($byType['stock_in']),
+            'dispatch_out'  => abs($byType['dispatch_out']),
+            'returned_in'   => abs($byType['returned_in']),
             'planted_out'   => abs($byType['planted_out']),
             'lost'          => abs($byType['lost']),
             'adjustment'    => $byType['adjustment'],

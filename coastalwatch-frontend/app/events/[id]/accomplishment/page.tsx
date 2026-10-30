@@ -24,10 +24,23 @@ export default function EventAccomplishmentPage() {
   const eventId = Number(params.id)
   const [event, setEvent] = useState<PlantingEvent | null>(null)
   const [species, setSpecies] = useState<MangroveSpecies[]>([])
+  const [dispatch, setDispatch] = useState<{
+    dispatch_required: boolean
+    allocations: Array<{
+      mangrove_species_id: number
+      species_name: string
+      local_name: string | null
+      dispatched_quantity: number
+      planted_quantity: number
+      returned_quantity: number
+      remaining_quantity: number
+    }>
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   const [existing, setExisting] = useState<any>(null)
   const [speciesId, setSpeciesId] = useState('')
   const [seedlings, setSeedlings] = useState('0')
+  const [plantingQuantities, setPlantingQuantities] = useState<Record<number, string>>({})
   const [volunteers, setVolunteers] = useState('0')
   const [remarks, setRemarks] = useState('')
   const [photos, setPhotos] = useState<File[]>([])
@@ -54,11 +67,16 @@ export default function EventAccomplishmentPage() {
   useEffect(() => {
     if (authLoading) return
     if (!user || user.role !== 'field_worker') { router.replace('/login'); return }
-    Promise.all([fetchPastEvents(), fetchSpecies(), api.get(`/events/${eventId}/accomplishments/mine`).catch(() => ({ data: null }))])
-      .then(([past, speciesList, mine]) => {
+    Promise.all([
+      fetchPastEvents(),
+      fetchSpecies(),
+      api.get(`/events/${eventId}/accomplishments/mine`).catch(() => ({ data: null })),
+      api.get(`/events/${eventId}/seedling-dispatch`),
+    ])
+      .then(([past, speciesList, mine, dispatchResult]) => {
         const found = past.find(e => e.id === eventId)
         if (!found || !found.can_report_accomplishment) { toast.error('This event is not assigned to your site.'); router.replace('/events'); return }
-        setEvent(found); setSpecies(speciesList); setExisting(mine.data)
+        setEvent(found); setSpecies(speciesList); setExisting(mine.data); setDispatch(dispatchResult.data)
       })
       .catch(() => toast.error('Could not load event report details.'))
       .finally(() => setLoading(false))
@@ -128,15 +146,32 @@ export default function EventAccomplishmentPage() {
     )
   }
 
+  const dispatchedPlantings = (dispatch?.allocations ?? []).map(item => ({
+      mangrove_species_id: item.mangrove_species_id,
+      seedlings_planted: Number.parseInt(plantingQuantities[item.mangrove_species_id] ?? '0', 10) || 0,
+  }))
+  const totalDispatchedPlantings = dispatchedPlantings.reduce((sum, item) => sum + item.seedlings_planted, 0)
+
   async function submit() {
-    if (!event || !speciesId || photos.length < 1 || !/^\d+$/.test(seedlings) || !/^\d+$/.test(volunteers)) {
-      toast.error('Choose a species, add 1–5 photos, and enter whole number counts.'); return
+    if (!event || (dispatch?.dispatch_required ? dispatchedPlantings.length === 0 : !speciesId)
+      || photos.length < 1 || !/^\d+$/.test(seedlings) || !/^\d+$/.test(volunteers)) {
+      toast.error('Choose the dispatched species, add 1–5 photos, and enter whole number counts.'); return
+    }
+    if (dispatch?.dispatch_required && dispatchedPlantings.some((item, index) => item.seedlings_planted > dispatch.allocations[index].remaining_quantity)) {
+      toast.error('Planted quantities cannot exceed the seedlings dispatched to this event.'); return
     }
     if (!confirm('Are you sure you want to submit this accomplishment report?')) return
     setSubmitting(true)
     const body = new FormData()
-    body.append('mangrove_species_id', speciesId)
-    body.append('seedlings_planted', seedlings)
+    if (dispatch?.dispatch_required) {
+      dispatchedPlantings.forEach((item, index) => {
+        body.append(`plantings[${index}][mangrove_species_id]`, String(item.mangrove_species_id))
+        body.append(`plantings[${index}][seedlings_planted]`, String(item.seedlings_planted))
+      })
+    } else {
+      body.append('mangrove_species_id', speciesId)
+      body.append('seedlings_planted', seedlings)
+    }
     body.append('volunteers_present', volunteers)
     body.append('remarks', remarks)
     photos.forEach((file, index) => body.append(`photos[${index}]`, file))
@@ -153,13 +188,25 @@ export default function EventAccomplishmentPage() {
   if (!event) return <SidebarLayout><div className="p-6">Event not found.</div></SidebarLayout>
   return <SidebarLayout title="Event Accomplishment Report" subtitle="Submit the Day 0 baseline for mangrove growth monitoring">
     <main className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      {existing ? <section className="card space-y-2"><h2 className="text-lg font-bold text-green-800">Report Submitted · View Report</h2><p><strong>Event:</strong> {event.name} · {formatDate(event.scheduled_at)}</p><p><strong>Reporter:</strong> {existing.user?.name ?? 'Bantay Bakawan'}</p><p><strong>Submitted:</strong> {existing.submitted_at ? formatDate(existing.submitted_at) : ''}</p><p><strong>Species:</strong> {existing.species_name}</p><p><strong>Seedlings planted:</strong> {existing.seedlings_planted}</p><p><strong>Volunteers present:</strong> {existing.volunteers_present}</p>{existing.remarks && <p><strong>Observation / Remarks:</strong> {existing.remarks}</p>}<p><strong>Location:</strong> {existing.latitude ?? '—'}, {existing.longitude ?? '—'}</p><div className="grid grid-cols-2 gap-2">{(existing.photos ?? []).map((photo: any, i: number) => <img key={i} src={photo.url} alt={`Submitted event photo ${i + 1}`} className="rounded-xl w-full aspect-square object-cover" />)}</div></section> : <>
+      {existing ? <section className="card space-y-2"><h2 className="text-lg font-bold text-green-800">Report Submitted · View Report</h2><p><strong>Event:</strong> {event.name} · {formatDate(event.scheduled_at)}</p><p><strong>Reporter:</strong> {existing.user?.name ?? 'Bantay Bakawan'}</p><p><strong>Submitted:</strong> {existing.submitted_at ? formatDate(existing.submitted_at) : ''}</p>{existing.plantings?.length ? existing.plantings.map((item: any) => <p key={item.mangrove_species_id}><strong>{item.species_name} planted:</strong> {item.seedlings_planted}</p>) : <><p><strong>Species:</strong> {existing.species_name}</p><p><strong>Seedlings planted:</strong> {existing.seedlings_planted}</p></>}<p><strong>Volunteers present:</strong> {existing.volunteers_present}</p>{existing.remarks && <p><strong>Observation / Remarks:</strong> {existing.remarks}</p>}<p><strong>Location:</strong> {existing.latitude ?? '—'}, {existing.longitude ?? '—'}</p><div className="grid grid-cols-2 gap-2">{(existing.photos ?? []).map((photo: any, i: number) => <img key={i} src={photo.url} alt={`Submitted event photo ${i + 1}`} className="rounded-xl w-full aspect-square object-cover" />)}</div></section> : <>
         <section className="card space-y-4">
           <label className="block text-sm font-semibold">Event Title<input readOnly value={event.name} className="input mt-1 bg-gray-50" /></label>
           <label className="block text-sm font-semibold">Event Date<input readOnly value={formatDate(event.scheduled_at)} className="input mt-1 bg-gray-50" /></label>
           <label className="block text-sm font-semibold">Report Submission Date<input readOnly value={today} className="input mt-1 bg-gray-50" /></label>
-          <label className="block text-sm font-semibold">Mangrove Species planted<select className="input mt-1" value={speciesId} onChange={e => setSpeciesId(e.target.value)}><option value="">Select species</option>{species.map(item => <option key={item.id} value={item.id}>{item.local_name || item.scientific_name} ({item.scientific_name})</option>)}</select></label>
-          <label className="block text-sm font-semibold">Total Seedlings Planted<input className="input mt-1 min-h-12" type="number" min="0" step="1" value={seedlings} onChange={e => setSeedlings(e.target.value)} /></label>
+          {dispatch?.dispatch_required ? <div className="space-y-3">
+            <p className="text-sm font-semibold">Dispatched seedlings planted by species</p>
+            {dispatch.allocations.length === 0 && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">MENRO has not dispatched seedlings to this event yet.</p>}
+            {dispatch.allocations.map(item => <label key={item.mangrove_species_id} className="block text-sm font-medium">
+              {item.local_name || item.species_name} <span className="font-normal text-gray-500">({item.species_name}) · {item.remaining_quantity} remaining from dispatch</span>
+              <input className="input mt-1 min-h-11" type="number" min="0" max={item.remaining_quantity} step="1"
+                value={plantingQuantities[item.mangrove_species_id] ?? '0'}
+                onChange={e => setPlantingQuantities(current => ({ ...current, [item.mangrove_species_id]: e.target.value }))} />
+            </label>)}
+            <p className="text-xs text-gray-500">Total reported planted: {totalDispatchedPlantings.toLocaleString()}</p>
+          </div> : <>
+            <label className="block text-sm font-semibold">Mangrove Species planted<select className="input mt-1" value={speciesId} onChange={e => setSpeciesId(e.target.value)}><option value="">Select species</option>{species.map(item => <option key={item.id} value={item.id}>{item.local_name || item.scientific_name} ({item.scientific_name})</option>)}</select></label>
+            <label className="block text-sm font-semibold">Total Seedlings Planted<input className="input mt-1 min-h-12" type="number" min="0" step="1" value={seedlings} onChange={e => setSeedlings(e.target.value)} /></label>
+          </>}
           <label className="block text-sm font-semibold">Volunteers Present<input className="input mt-1 min-h-12" type="number" min="0" step="1" value={volunteers} onChange={e => setVolunteers(e.target.value)} /></label>
           <label className="block text-sm font-semibold">Documentation photos (1–5)<input className="input mt-1 min-h-12" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple onChange={e => void choosePhotos(e.target.files)} /></label>
           <p className="text-xs text-gray-500">{photos.length} photo(s) selected. Each file must be 10 MB or smaller.</p>
@@ -167,7 +214,7 @@ export default function EventAccomplishmentPage() {
           {!hasExifGps && photos.length > 0 && <div className="space-y-2"><p className="text-sm text-amber-800">⚠️ GPS location missing. Tap the map to pin the planting spot or use current location.</p><button type="button" className="btn-secondary min-h-11" onClick={useCurrentLocation} disabled={locating}>{locating ? 'Finding current location…' : 'Use current location'}</button><LocationPicker latitude={coordinates?.lat ?? null} longitude={coordinates?.lng ?? null} onChange={(lat, lng) => setCoordinates({ lat, lng })} /></div>}
           <label className="block text-sm font-semibold">Observation / Remarks <span className="font-normal text-gray-400">(optional)</span><textarea className="input mt-1 min-h-28" maxLength={5000} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Issues encountered, site condition, weather..." /></label>
         </section>
-        <button onClick={submit} disabled={submitting} className="btn-primary min-h-12 w-full justify-center">{submitting ? 'Submitting…' : 'Submit Accomplishment Report'}</button>
+        <button onClick={submit} disabled={submitting || Boolean(dispatch?.dispatch_required && dispatch.allocations.length === 0)} className="btn-primary min-h-12 w-full justify-center">{submitting ? 'Submitting…' : 'Submit Accomplishment Report'}</button>
       </>}
     </main>
   </SidebarLayout>

@@ -21,7 +21,7 @@ class InventoryMovement extends Model
 {
     use HasFactory;
 
-    public const TYPES = ['stock_in', 'planted_out', 'lost', 'adjustment'];
+    public const TYPES = ['stock_in', 'dispatch_out', 'returned_in', 'planted_out', 'lost', 'adjustment'];
 
     protected $fillable = [
         'seedling_inventory_id', 'recorded_by', 'type', 'quantity', 'movement_date', 'note',

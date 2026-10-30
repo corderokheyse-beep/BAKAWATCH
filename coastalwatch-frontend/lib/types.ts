@@ -483,10 +483,11 @@ export interface SeedlingSummaryItem {
 export interface SeedlingAvailability {
   species_name: string
   total_remaining: number
+  eligible_remaining?: number
 }
 
 // ─── Inventory stock-movement ledger ──────────────────────────────────────────
-export type InventoryMovementType = 'stock_in' | 'planted_out' | 'lost' | 'adjustment'
+export type InventoryMovementType = 'stock_in' | 'dispatch_out' | 'returned_in' | 'planted_out' | 'lost' | 'adjustment'
 
 export interface InventoryMovement {
   id: number

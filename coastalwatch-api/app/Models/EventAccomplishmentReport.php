@@ -14,7 +14,13 @@ class EventAccomplishmentReport extends Model
         'latitude', 'longitude', 'remarks', 'submitted_at', 'report_id',
     ];
 
-    protected $casts = ['photos' => 'array', 'submitted_at' => 'datetime', 'latitude' => 'float', 'longitude' => 'float'];
+    protected $casts = [
+        'photos' => 'array',
+        'plantings' => 'array',
+        'submitted_at' => 'datetime',
+        'latitude' => 'float',
+        'longitude' => 'float',
+    ];
 
     public function event() { return $this->belongsTo(PlantingEvent::class, 'planting_event_id'); }
     public function site() { return $this->belongsTo(RestorationSite::class, 'restoration_site_id'); }

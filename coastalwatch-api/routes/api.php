@@ -147,6 +147,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/events/{plantingEvent}/attendance', [PlantingEventController::class, 'undoAttendance']);
         Route::post('/events/{plantingEvent}/accomplishments', [EventAccomplishmentReportController::class, 'store']);
         Route::get('/events/{plantingEvent}/accomplishments/mine', [EventAccomplishmentReportController::class, 'mine']);
+        Route::get('/events/{plantingEvent}/seedling-dispatch', [EventAccomplishmentReportController::class, 'dispatchSummary']);
         Route::get('/analytics/mine', [AnalyticsController::class, 'mine']);
     });
 
@@ -342,6 +343,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/event-requests',                                    [PlantationEventRequestController::class, 'index']);
         Route::get('/event-requests/{plantationEventRequest}',           [PlantationEventRequestController::class, 'show']);
         Route::patch('/event-requests/{plantationEventRequest}/review',  [PlantationEventRequestController::class, 'review']);
+        Route::post('/event-requests/{plantationEventRequest}/dispatch', [PlantationEventRequestController::class, 'dispatch']);
+        Route::post('/event-requests/{plantationEventRequest}/return', [PlantationEventRequestController::class, 'returnRemaining']);
         Route::delete('/event-requests/{plantationEventRequest}',        [PlantationEventRequestController::class, 'destroy']);
 
         // Site drawn areas — add / edit / remove (green mangrove + red planted)

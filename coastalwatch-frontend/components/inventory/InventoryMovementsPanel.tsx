@@ -14,6 +14,8 @@ import toast from 'react-hot-toast'
 // Visual config per movement type. `sign` is how the type affects the balance.
 const TYPE_UI: Record<InventoryMovementType, { label: string; sign: '+' | '-' | '±'; cls: string; Icon: any }> = {
   stock_in:    { label: 'Stock in',    sign: '+', cls: 'text-green-700 bg-green-50 border-green-200',  Icon: ArrowDownCircle },
+  dispatch_out:{ label: 'Dispatched',  sign: '-', cls: 'text-violet-700 bg-violet-50 border-violet-200', Icon: ArrowUpCircle },
+  returned_in: { label: 'Returned',    sign: '+', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200', Icon: ArrowDownCircle },
   planted_out: { label: 'Planted',     sign: '-', cls: 'text-blue-700 bg-blue-50 border-blue-200',     Icon: ArrowUpCircle },
   lost:        { label: 'Lost',        sign: '-', cls: 'text-red-700 bg-red-50 border-red-200',        Icon: AlertTriangle },
   adjustment:  { label: 'Adjustment',  sign: '±', cls: 'text-gray-700 bg-gray-50 border-gray-200',     Icon: SlidersHorizontal },
@@ -25,14 +27,18 @@ export interface LedgerTotals {
   balance: number
   stock_in: number
   planted_out: number
+  dispatch_out: number
+  returned_in: number
   lost: number
 }
 
 function totalsFrom(movements: InventoryMovement[]): LedgerTotals {
-  let stock_in = 0, planted_out = 0, lost = 0, balance = 0
+  let stock_in = 0, dispatch_out = 0, returned_in = 0, planted_out = 0, lost = 0, balance = 0
   for (const m of movements) {
     balance += m.quantity
     if (m.type === 'stock_in') stock_in += m.quantity
+    else if (m.type === 'dispatch_out') dispatch_out += Math.abs(m.quantity)
+    else if (m.type === 'returned_in') returned_in += m.quantity
     else if (m.type === 'planted_out') planted_out += Math.abs(m.quantity)
     else if (m.type === 'lost') lost += Math.abs(m.quantity)
     else if (m.type === 'adjustment') { // split signed adjustment into the right bucket
@@ -40,7 +46,7 @@ function totalsFrom(movements: InventoryMovement[]): LedgerTotals {
       else lost += Math.abs(m.quantity)
     }
   }
-  return { balance, stock_in, planted_out, lost }
+  return { balance, stock_in, dispatch_out, returned_in, planted_out, lost }
 }
 
 export default function InventoryMovementsPanel({

@@ -12,12 +12,13 @@ use Illuminate\Support\Facades\DB;
 class SeedlingInventoryController extends Controller
 {
     /** Public aggregate only; exposes no inventory records or user details. */
-    public function availability(): JsonResponse
+    public function availability(Request $request): JsonResponse
     {
         $entries = SeedlingInventory::query()
             ->withSum('movements', 'quantity')
-            ->get(['id', 'species_name', 'beginning_stock', 'quantity_received', 'quantity_planted', 'quantity_damaged']);
+            ->get(['id', 'restoration_site_id', 'species_name', 'beginning_stock', 'quantity_received', 'quantity_planted', 'quantity_damaged']);
 
+        $siteId = $request->integer('restoration_site_id');
         $availability = $entries
             ->filter(fn ($entry) => trim((string) $entry->species_name) !== '')
             ->groupBy(fn ($entry) => trim((string) $entry->species_name))
@@ -28,6 +29,13 @@ class SeedlingInventoryController extends Controller
                     (int) ($entry->movements_sum_quantity
                         ?? ($entry->beginning_stock + $entry->quantity_received - $entry->quantity_planted - $entry->quantity_damaged)),
                 )),
+                'eligible_remaining' => $speciesEntries->sum(fn ($entry) => (
+                    !$siteId || $entry->restoration_site_id === null || (int) $entry->restoration_site_id === $siteId
+                ) ? max(
+                    0,
+                    (int) ($entry->movements_sum_quantity
+                        ?? ($entry->beginning_stock + $entry->quantity_received - $entry->quantity_planted - $entry->quantity_damaged)),
+                ) : 0),
             ])
             ->values();
 

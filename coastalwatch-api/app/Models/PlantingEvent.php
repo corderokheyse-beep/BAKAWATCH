@@ -51,6 +51,11 @@ class PlantingEvent extends Model
         return $this->hasMany(EventAccomplishmentReport::class);
     }
 
+    public function seedlingAllocations()
+    {
+        return $this->hasMany(EventSeedlingAllocation::class);
+    }
+
     public function sourceRequest()
     {
         return $this->belongsTo(PlantationEventRequest::class, 'event_request_id');
