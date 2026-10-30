@@ -8,6 +8,7 @@ use App\Models\PlantingEvent;
 use App\Models\Report;
 use App\Models\RestorationSite;
 use App\Models\SeedlingInventory;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -19,30 +20,55 @@ use Illuminate\Support\Facades\DB;
  */
 class StarterOperationalDataSeeder extends Seeder
 {
+    private const COMPLETED_SETTING = 'starter_operational_data_seeded';
+
     public function run(): void
     {
-        $admin = User::query()->where('role', 'admin')->where('is_active', true)->first();
-        if (! $admin) {
-            throw new \RuntimeException(
-                'Cannot seed starter operational data without an active admin. Run ProductionSeeder first.'
-            );
-        }
+        $seeded = DB::transaction(function (): bool {
+            DB::table('settings')->insertOrIgnore([
+                'key' => self::COMPLETED_SETTING,
+                'value' => 'false',
+                'type' => 'boolean',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        $site = RestorationSite::query()->where('name', 'Agsalin Mangrove Reserve')->first();
-        if (! $site) {
-            throw new \RuntimeException(
-                'Cannot seed starter operational data without starter sites. Run StarterSitesSeeder first.'
-            );
-        }
+            $marker = Setting::query()
+                ->where('key', self::COMPLETED_SETTING)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        DB::transaction(function () use ($admin, $site): void {
+            if ($marker->typedValue()) {
+                return false;
+            }
+
+            $admin = User::query()->where('role', 'admin')->where('is_active', true)->first();
+            if (! $admin) {
+                throw new \RuntimeException(
+                    'Cannot seed starter operational data without an active admin. Run ProductionSeeder first.'
+                );
+            }
+
+            $site = RestorationSite::query()->where('name', 'Agsalin Mangrove Reserve')->first();
+            if (! $site) {
+                throw new \RuntimeException(
+                    'Cannot seed starter operational data without starter sites. Run StarterSitesSeeder first.'
+                );
+            }
+
             $this->seedInventory($admin, $site);
             $this->seedEvents($admin, $site);
             $this->seedReports($admin);
             $this->seedTipsAndGuides($admin);
+
+            $marker->update(['value' => 'true']);
+
+            return true;
         });
 
-        $this->command?->info('Clearly labeled starter inventory, events, reports, and tips/guides seeded.');
+        $this->command?->info($seeded
+            ? 'Clearly labeled starter inventory, events, reports, and tips/guides seeded.'
+            : 'Starter operational data was already seeded; existing records were left unchanged.');
     }
 
     private function seedInventory(User $admin, RestorationSite $site): void

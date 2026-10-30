@@ -48,6 +48,17 @@ test('starter operational data is sample-labeled and safe to seed repeatedly', f
     $this->getJson('/api/admin/articles')
         ->assertOk()
         ->assertJsonCount(2);
+
+    PlantingEvent::where('name', 'like', 'SAMPLE:%')->delete();
+    $inventoryIds = SeedlingInventory::where('notes', 'like', 'SAMPLE DATA ONLY:%')->pluck('id');
+    InventoryMovement::whereIn('seedling_inventory_id', $inventoryIds)->delete();
+    SeedlingInventory::whereIn('id', $inventoryIds)->delete();
+
+    app(StarterOperationalDataSeeder::class)->run();
+
+    expect(PlantingEvent::where('name', 'like', 'SAMPLE:%')->count())->toBe(0)
+        ->and(SeedlingInventory::where('notes', 'like', 'SAMPLE DATA ONLY:%')->count())->toBe(0)
+        ->and(InventoryMovement::where('note', 'like', 'SAMPLE DATA ONLY:%')->count())->toBe(0);
 });
 
 test('starter operational data requires an active admin and starter sites', function () {

@@ -19,6 +19,13 @@ if [ "${RUN_STARTER_SITES_SEEDER:-false}" = "true" ]; then
     fi
     php artisan db:seed --class='Database\Seeders\ProductionSeeder' --force
     php artisan db:seed --class='Database\Seeders\StarterSitesSeeder' --force
+fi
+
+if [ "${RUN_STARTER_OPERATIONAL_DATA_SEEDER:-false}" = "true" ]; then
+    if [ -z "${ADMIN_PASSWORD:-}" ]; then
+        echo "RUN_STARTER_OPERATIONAL_DATA_SEEDER requires ADMIN_PASSWORD to create or activate the site creator account."
+        exit 1
+    fi
     php artisan db:seed --class='Database\Seeders\StarterOperationalDataSeeder' --force
 fi
 
