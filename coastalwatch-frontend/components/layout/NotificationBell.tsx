@@ -33,6 +33,11 @@ const TYPE_CONFIG: Record<string, {
     bg: 'bg-red-100', text: 'text-red-600',
     label: 'Event Cancelled',
   },
+  event_deleted: {
+    icon: <XCircle className="w-4 h-4" />,
+    bg: 'bg-red-100', text: 'text-red-600',
+    label: 'Event Deleted',
+  },
   new_event: {
     icon: <Calendar className="w-4 h-4" />,
     bg: 'bg-green-100', text: 'text-green-600',
@@ -102,6 +107,7 @@ function getNotificationUrl(n: Notification): string | null {
       return d.event_id ? `/events?event_id=${d.event_id}` : '/events'
 
     case 'event_cancelled':
+    case 'event_deleted':
       return '/events'
 
     case 'event_registration':

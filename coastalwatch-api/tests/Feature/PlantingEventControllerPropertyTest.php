@@ -6,10 +6,19 @@
 // Feature: mangrove-monitoring-system, Property 18: Cancellation triggers notifications for all registrants
 
 use App\Models\EventRegistration;
+use App\Models\EventAccomplishmentReport;
+use App\Models\EventAttendanceConfirmation;
+use App\Models\EventSeedlingAllocation;
+use App\Models\InventoryMovement;
+use App\Models\MangroveSpecies;
+use App\Models\PlantationEventRequest;
 use App\Models\PlantingEvent;
+use App\Models\Report;
 use App\Models\RestorationSite;
+use App\Models\SeedlingInventory;
 use App\Models\User;
 use App\Notifications\EventCancelledNotification;
+use App\Notifications\EventDeletedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 
@@ -94,6 +103,149 @@ test('MENRO all-events endpoint returns participant details', function () {
         ->assertJsonPath('0.registrations.0.id', $registration->id)
         ->assertJsonPath('0.registrations.0.organization', 'Community Group')
         ->assertJsonPath('0.registrations.0.age', 28);
+});
+
+test('MENRO event deletion removes linked event data, returns unused dispatch, and preserves inventory ledger', function () {
+    Notification::fake();
+
+    $site = pec_makeSite();
+    $menro = pec_makeMenro();
+    $registrant = pec_makeVolunteer();
+    $requester = pec_makeVolunteer();
+    $fieldWorker = pec_makeFieldWorker();
+    $event = pec_makeEvent($site, ['status' => 'open']);
+    $species = MangroveSpecies::create([
+        'scientific_name' => 'Rhizophora mucronata',
+        'local_name' => 'Bakawan lalaki',
+        'is_active' => true,
+    ]);
+    $eventRequest = PlantationEventRequest::create([
+        'requester_id' => $requester->id,
+        'preferred_restoration_site_id' => $site->id,
+        'organization_name' => 'Test Organization',
+        'contact_person' => 'Test Requester',
+        'contact_email' => $requester->email,
+        'contact_phone' => '09123456789',
+        'event_name' => $event->name,
+        'preferred_date' => now()->addDays(7)->toDateString(),
+        'expected_participants' => 5,
+        'seedlings_requested' => 8,
+        'seedling_quantities' => [$species->id => 8],
+        'target_species' => [$species->id],
+        'status' => 'approved',
+        'planting_event_id' => $event->id,
+        'reviewed_by' => $menro->id,
+        'reviewed_at' => now(),
+    ]);
+    $event->update(['is_from_request' => true, 'source_request_id' => $eventRequest->id]);
+
+    $inventory = SeedlingInventory::create([
+        'restoration_site_id' => $site->id,
+        'recorded_by' => $menro->id,
+        'species_name' => $species->scientific_name,
+        'source_nursery' => 'Test nursery',
+        'date_received' => now()->subDay()->toDateString(),
+        'beginning_stock' => 0,
+        'quantity_received' => 10,
+        'quantity_planted' => 0,
+        'quantity_damaged' => 0,
+        'stage' => 'seedling',
+    ]);
+    InventoryMovement::create([
+        'seedling_inventory_id' => $inventory->id,
+        'recorded_by' => $menro->id,
+        'type' => 'stock_in',
+        'quantity' => 10,
+        'movement_date' => now()->subDay()->toDateString(),
+    ]);
+    InventoryMovement::create([
+        'seedling_inventory_id' => $inventory->id,
+        'recorded_by' => $menro->id,
+        'type' => 'dispatch_out',
+        'quantity' => -8,
+        'movement_date' => now()->toDateString(),
+    ]);
+    EventSeedlingAllocation::create([
+        'plantation_event_request_id' => $eventRequest->id,
+        'planting_event_id' => $event->id,
+        'seedling_inventory_id' => $inventory->id,
+        'mangrove_species_id' => $species->id,
+        'dispatched_by' => $menro->id,
+        'dispatched_quantity' => 8,
+        'planted_quantity' => 3,
+        'returned_quantity' => 0,
+    ]);
+    $report = Report::create([
+        'user_id' => $fieldWorker->id,
+        'title' => 'Event Accomplishment Report: ' . $event->name,
+        'description' => 'Test event accomplishment',
+        'latitude' => 12.5,
+        'longitude' => 121.4,
+        'location_name' => $site->name,
+        'category' => 'restoration',
+        'report_type' => 'event_accomplishment',
+        'status' => 'pending',
+    ]);
+    EventAccomplishmentReport::create([
+        'planting_event_id' => $event->id,
+        'restoration_site_id' => $site->id,
+        'user_id' => $fieldWorker->id,
+        'mangrove_species_id' => $species->id,
+        'species_name' => $species->scientific_name,
+        'seedlings_planted' => 3,
+        'volunteers_present' => 2,
+        'photos' => [],
+        'submitted_at' => now(),
+        'report_id' => $report->id,
+    ]);
+    $registration = EventRegistration::create([
+        'planting_event_id' => $event->id,
+        'user_id' => $registrant->id,
+        'full_name' => $registrant->name,
+        'email' => $registrant->email,
+        'registration_status' => 'confirmed',
+    ]);
+    EventAttendanceConfirmation::create([
+        'planting_event_id' => $event->id,
+        'user_id' => $registrant->id,
+        'confirmed_at' => now(),
+    ]);
+
+    $this->actingAs($menro)
+        ->deleteJson("/api/events/{$event->id}")
+        ->assertOk()
+        ->assertJsonPath('deleted_request_ids.0', $eventRequest->id)
+        ->assertJsonPath('returned_quantity', 5)
+        ->assertJsonPath('notified_users', 2)
+        ->assertJsonPath('media_cleanup_failed', false);
+
+    expect(PlantingEvent::whereKey($event->id)->exists())->toBeFalse()
+        ->and(PlantationEventRequest::whereKey($eventRequest->id)->exists())->toBeFalse()
+        ->and(EventRegistration::whereKey($registration->id)->exists())->toBeFalse()
+        ->and(EventAttendanceConfirmation::where('planting_event_id', $event->id)->exists())->toBeFalse()
+        ->and(EventAccomplishmentReport::where('planting_event_id', $event->id)->exists())->toBeFalse()
+        ->and(Report::withTrashed()->findOrFail($report->id)->trashed())->toBeTrue()
+        ->and((int) $inventory->movements()->sum('quantity'))->toBe(7)
+        ->and(InventoryMovement::where('seedling_inventory_id', $inventory->id)->where('type', 'dispatch_out')->value('quantity'))->toBe(-8)
+        ->and(InventoryMovement::where('seedling_inventory_id', $inventory->id)->where('type', 'returned_in')->value('quantity'))->toBe(5);
+
+    Notification::assertSentTo($registrant, EventDeletedNotification::class);
+    Notification::assertSentTo($requester, EventDeletedNotification::class);
+
+    $this->actingAs($menro)->getJson('/api/events/all')->assertOk()->assertJsonMissing(['id' => $event->id]);
+    $this->actingAs($registrant)->getJson('/api/events/my-registrations')->assertOk()->assertExactJson([]);
+    $this->actingAs($requester)->getJson('/api/event-requests/mine')->assertOk()->assertExactJson([]);
+});
+
+test('only event managers can permanently delete a planting event', function () {
+    $site = pec_makeSite();
+    $event = pec_makeEvent($site);
+
+    $this->actingAs(pec_makeVolunteer())
+        ->deleteJson("/api/events/{$event->id}")
+        ->assertForbidden();
+
+    expect(PlantingEvent::whereKey($event->id)->exists())->toBeTrue();
 });
 
 // ---------------------------------------------------------------------------

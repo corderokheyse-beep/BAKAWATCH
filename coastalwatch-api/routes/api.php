@@ -335,6 +335,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Note: /reports/generate and /reports/generated are declared at top level to avoid {report} conflict
         Route::post('/events', [PlantingEventController::class, 'store']);
         Route::put('/events/{plantingEvent}', [PlantingEventController::class, 'update']);
+        Route::delete('/events/{plantingEvent}', [PlantingEventController::class, 'destroy']);
         Route::get('/events/all', [PlantingEventController::class, 'allEvents']);
         Route::patch('/events/{plantingEvent}/registrations/{eventRegistration}/review', [PlantingEventController::class, 'reviewRegistration']);
         Route::get('/event-accomplishments', [EventAccomplishmentReportController::class, 'index']);

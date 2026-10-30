@@ -111,6 +111,9 @@ function EventsPageInner() {
   const [attendance, setAttendance] = useState<Set<number>>(new Set())
   const [attendanceBusy, setAttendanceBusy] = useState<number | null>(null)
   const [detailEvent, setDetailEvent] = useState<PlantingEvent | null>(null)
+  const [eventToDelete, setEventToDelete] = useState<PlantingEvent | null>(null)
+  const [deleteConfirmationValue, setDeleteConfirmationValue] = useState('')
+  const [deletingEvent, setDeletingEvent] = useState(false)
 
   // Create/Edit modal
   const [modal, setModal]             = useState(false)
@@ -740,7 +743,7 @@ function EventsPageInner() {
     } finally { setSubmitting(false) }
   }
 
-  function deleteEvent(id: number) {
+  function cancelEvent(id: number) {
     const event = events.find(e => e.id === id)
     setConfirmPrompt({
       title: 'Cancel Planting Event',
@@ -755,6 +758,46 @@ function EventsPageInner() {
         } catch { toast.error('Failed to cancel event') }
       },
     })
+  }
+
+  const confirmDeleteEvent = async () => {
+    if (!eventToDelete || deleteConfirmationValue.trim() !== eventToDelete.name) return
+
+    setDeletingEvent(true)
+    try {
+      const { data } = await api.delete(`/events/${eventToDelete.id}`)
+      const deletedRequestIds: number[] = data.deleted_request_ids ?? []
+      setEvents(prev => prev.filter(event => event.id !== eventToDelete.id))
+      setPastEvents(prev => prev.filter(event => event.id !== eventToDelete.id))
+      setDetailEvent(prev => prev?.id === eventToDelete.id ? null : prev)
+      setRegistered(prev => { const next = new Set(prev); next.delete(eventToDelete.id); return next })
+      setPendingReg(prev => { const next = new Set(prev); next.delete(eventToDelete.id); return next })
+      setAttendance(prev => { const next = new Set(prev); next.delete(eventToDelete.id); return next })
+      setRequests(prev => prev ? {
+        ...prev,
+        data: prev.data.filter(request => !deletedRequestIds.includes(request.id)),
+        total: Math.max(0, prev.total - deletedRequestIds.length),
+      } : prev)
+      setExpandedReqId(prev => prev !== null && deletedRequestIds.includes(prev) ? null : prev)
+      if (activeTab === 'requests') {
+        loadRequests()
+        api.get('/event-requests/pending-count')
+          .then(r => setPendingCount(r.data.count))
+          .catch(() => toast.error('Event deleted, but the pending request count could not be refreshed.'))
+      }
+
+      toast.success(
+        data.media_cleanup_failed
+          ? 'Event deleted. Some associated photos could not be removed from image storage.'
+          : 'Event and linked request deleted. Participants were notified; inventory history was retained.'
+      )
+      setEventToDelete(null)
+      setDeleteConfirmationValue('')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? 'Could not delete the event.')
+    } finally {
+      setDeletingEvent(false)
+    }
   }
 
   if (loading) return <SidebarLayout><LoadingSpinner /></SidebarLayout>
@@ -870,7 +913,19 @@ function EventsPageInner() {
                                     className="p-1 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors">
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
-                                  <button onClick={() => deleteEvent(event.id)}
+                                  {event.status !== 'cancelled' && event.status !== 'completed' && (
+                                    <button
+                                      onClick={() => cancelEvent(event.id)}
+                                      title="Cancel event"
+                                      aria-label={`Cancel ${event.name}`}
+                                      className="p-1 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
+                                      <XCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => { setEventToDelete(event); setDeleteConfirmationValue('') }}
+                                    title="Permanently delete event"
+                                    aria-label={`Permanently delete ${event.name}`}
                                     className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -1068,7 +1123,18 @@ function EventsPageInner() {
                                 </span>
                               )}
                             </div>
-                            <Badge label={event.status === 'open' ? 'completed' : event.status} type="status" />
+                            <div className="flex items-center gap-1">
+                              <Badge label={event.status === 'open' ? 'completed' : event.status} type="status" />
+                              {canManage && (
+                                <button
+                                  onClick={() => { setEventToDelete(event); setDeleteConfirmationValue('') }}
+                                  title="Permanently delete event"
+                                  aria-label={`Permanently delete ${event.name}`}
+                                  className="p-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {event.site?.name && (
                             <div className="flex items-center gap-1 mt-1">
@@ -1689,6 +1755,62 @@ function EventsPageInner() {
       )}
 
       {/* â”€â”€ Review Request Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {eventToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-event-title"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+          >
+            <div className="px-6 py-4 border-b border-red-100 bg-red-50">
+              <h2 id="delete-event-title" className="font-bold text-red-900">Permanently delete this event?</h2>
+              <p className="text-sm text-red-800 mt-1 font-semibold">{eventToDelete.name}</p>
+            </div>
+            <div className="p-6 space-y-3">
+              <p className="text-sm text-gray-700">
+                This removes the event and its linked request from every account, along with registrations,
+                attendance confirmations, and event accomplishment records. This cannot be undone.
+              </p>
+              <p className="text-sm text-gray-600">
+                Any unused dispatched seedlings will be returned. Existing inventory movement history,
+                including planted quantities, will be kept.
+              </p>
+              <label htmlFor="delete-event-confirmation" className="block text-xs font-bold text-gray-700">
+                Type the event name to confirm
+              </label>
+              <input
+                id="delete-event-confirmation"
+                autoComplete="off"
+                value={deleteConfirmationValue}
+                onChange={event => setDeleteConfirmationValue(event.target.value)}
+                disabled={deletingEvent}
+                className="input w-full"
+                placeholder={eventToDelete.name}
+              />
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setEventToDelete(null); setDeleteConfirmationValue('') }}
+                  disabled={deletingEvent}
+                  className="btn-secondary flex-1"
+                >
+                  Keep Event
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteEvent}
+                  disabled={deletingEvent || deleteConfirmationValue.trim() !== eventToDelete.name}
+                  className="btn-danger flex-1"
+                >
+                  {deletingEvent ? 'Deleting…' : 'Permanently Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {reviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scale-in">

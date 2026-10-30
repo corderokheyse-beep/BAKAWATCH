@@ -3,23 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
+use App\Models\EventAccomplishmentReport;
 use App\Models\EventRegistration;
 use App\Models\EventAttendanceConfirmation;
+use App\Models\EventSeedlingAllocation;
+use App\Models\PlantationEventRequest;
 use App\Models\PlantingEvent;
+use App\Models\Report;
 use App\Models\User;
 use App\Notifications\EventCancelledNotification;
+use App\Notifications\EventDeletedNotification;
 use App\Notifications\EventRegistrationConfirmedNotification;
 use App\Notifications\EventRegistrationSubmittedNotification;
 use App\Notifications\EventUpdatedNotification;
 use App\Notifications\NewPlantingEventNotification;
 use App\Services\EventSeedlingDispatchService;
+use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 
 class PlantingEventController extends Controller
 {
+    public function __construct(private CloudinaryService $cloudinary) {}
+
     private function actualRegistrationCapacityQuery($query)
     {
         // A legacy approval flow wrote the requester's organization headcount
@@ -253,6 +263,121 @@ class PlantingEventController extends Controller
         }
 
         return response()->json($plantingEvent->fresh());
+    }
+
+    /** menro / admin / staff — permanently delete an event and its linked records. */
+    public function destroy(Request $request, PlantingEvent $plantingEvent): JsonResponse
+    {
+        $result = DB::transaction(function () use ($request, $plantingEvent) {
+            $event = PlantingEvent::query()->lockForUpdate()->findOrFail($plantingEvent->id);
+            $registrationsCount = $event->registrations()->count();
+            $attendanceCount = $event->attendanceConfirmations()->count();
+            $accomplishments = EventAccomplishmentReport::where('planting_event_id', $event->id)->get();
+
+            $requestIds = EventSeedlingAllocation::query()
+                ->where('planting_event_id', $event->id)
+                ->pluck('plantation_event_request_id');
+            $requests = PlantationEventRequest::query()
+                ->where(function ($query) use ($event, $requestIds) {
+                    $query->where('planting_event_id', $event->id)
+                        ->orWhereIn('id', $requestIds);
+                    if ($event->source_request_id) {
+                        $query->orWhere('id', $event->source_request_id);
+                    }
+                })
+                ->get();
+
+            $reportIds = $accomplishments->pluck('report_id')->filter()->unique();
+            $reports = Report::query()
+                ->with('updates')
+                ->whereIn('id', $reportIds)
+                ->where('report_type', 'event_accomplishment')
+                ->get();
+
+            $publicIds = collect();
+            foreach ($accomplishments as $accomplishment) {
+                $publicIds->push(...collect($accomplishment->photos ?? [])->pluck('public_id')->all());
+            }
+            foreach ($reports as $report) {
+                $publicIds->push($report->image_public_id);
+                $publicIds->push(...collect($report->photos ?? [])->pluck('public_id')->all());
+                foreach ($report->updates as $update) {
+                    $publicIds->push($update->image_public_id);
+                    $publicIds->push(...collect($update->photos ?? [])->pluck('public_id')->all());
+                }
+            }
+
+            $recipientIds = $event->registrations()->whereNotNull('user_id')->pluck('user_id')
+                ->merge($requests->pluck('requester_id'))
+                ->filter()
+                ->unique();
+            $recipients = User::whereIn('id', $recipientIds)->get();
+
+            $snapshot = [
+                'name' => $event->name,
+                'status' => $event->status,
+                'scheduled_at' => $event->scheduled_at?->toIso8601String(),
+                'registrations_count' => $registrationsCount,
+                'attendance_confirmations_count' => $attendanceCount,
+                'accomplishments_count' => $accomplishments->count(),
+                'linked_request_ids' => $requests->pluck('id')->values()->all(),
+            ];
+
+            $returnedQuantity = app(EventSeedlingDispatchService::class)->returnUnused(
+                $event,
+                $request->user(),
+                "Unused seedlings returned before deletion of planting event #{$event->id}.",
+            );
+
+            Notification::send($recipients, new EventDeletedNotification($event));
+
+            foreach ($reports as $report) {
+                $report->delete();
+            }
+            PlantationEventRequest::whereIn('id', $requests->pluck('id'))->delete();
+            $event->delete();
+
+            ActivityLog::record('planting_event.deleted', $event, $snapshot, [
+                'returned_seedlings' => $returnedQuantity,
+                'notified_users' => $recipients->count(),
+                'deleted_request_ids' => $snapshot['linked_request_ids'],
+            ]);
+
+            return [
+                'deleted_request_ids' => $snapshot['linked_request_ids'],
+                'public_ids' => $publicIds->filter()->unique()->values()->all(),
+                'returned_quantity' => $returnedQuantity,
+                'notified_users' => $recipients->count(),
+            ];
+        });
+
+        $mediaCleanupFailed = false;
+        foreach ($result['public_ids'] as $publicId) {
+            try {
+                if (!$this->cloudinary->delete($publicId)) {
+                    $mediaCleanupFailed = true;
+                    Log::warning('Event deletion left an accomplishment image in storage.', [
+                        'event_id' => $plantingEvent->id,
+                        'public_id' => $publicId,
+                    ]);
+                }
+            } catch (\Throwable $exception) {
+                $mediaCleanupFailed = true;
+                Log::warning('Event deletion could not remove an accomplishment image from storage.', [
+                    'event_id' => $plantingEvent->id,
+                    'public_id' => $publicId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Event and linked request data deleted. Inventory movement history was retained.',
+            'deleted_request_ids' => $result['deleted_request_ids'],
+            'returned_quantity' => $result['returned_quantity'],
+            'notified_users' => $result['notified_users'],
+            'media_cleanup_failed' => $mediaCleanupFailed,
+        ]);
     }
 
     /** Public (no auth) — register for a request-sourced event with personal info */
