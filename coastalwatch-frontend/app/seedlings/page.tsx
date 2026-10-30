@@ -360,9 +360,9 @@ export default function SeedlingsPage() {
     </SidebarLayout>
   )
 
-  const totalReceived  = summary.reduce((s, r) => s + r.total_received,  0)
-  const totalPlanted   = summary.reduce((s, r) => s + r.total_planted,   0)
-  const totalRemaining = summary.reduce((s, r) => s + r.total_remaining, 0)
+  const totalReceived  = summary.reduce((s, r) => s + (Number(r.total_received) || 0),  0)
+  const totalPlanted   = summary.reduce((s, r) => s + (Number(r.total_planted) || 0),   0)
+  const totalRemaining = summary.reduce((s, r) => s + (Number(r.total_remaining) || 0), 0)
 
   // ── Period filter (daily / weekly / monthly) over the entry's date_received ──
   const periodCutoff = (p: typeof periodFilter): number | null => {

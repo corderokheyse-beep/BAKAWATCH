@@ -125,6 +125,14 @@ class SeedlingInventoryController extends Controller
             ->groupBy('seedling_inventories.species_name')
             ->get();
 
+        $rows->transform(function ($row) {
+            $row->total_received = (int) $row->total_received;
+            $row->total_planted = (int) $row->total_planted;
+            $row->total_damaged = (int) $row->total_damaged;
+            $row->total_remaining = (int) $row->total_remaining;
+            return $row;
+        });
+
         return response()->json($rows);
     }
 

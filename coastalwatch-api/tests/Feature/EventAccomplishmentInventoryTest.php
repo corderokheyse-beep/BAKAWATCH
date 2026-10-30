@@ -100,3 +100,41 @@ test('event accomplishments deduct planted seedlings once from available invento
     expect(EventAccomplishmentReport::where('planting_event_id', $secondEvent->id)->exists())->toBeFalse()
         ->and(InventoryMovement::where('seedling_inventory_id', $inventory->id)->where('type', 'planted_out')->sum('quantity'))->toBe(-3);
 });
+
+test('seedling summary returns numeric totals for multiple species', function () {
+    $menro = User::factory()->create(['role' => 'menro']);
+    $site = RestorationSite::create([
+        'created_by' => $menro->id,
+        'name' => 'Summary Test Site',
+        'status' => 'active',
+    ]);
+
+    foreach ([
+        ['Avicennia marina', 20, 5, 2],
+        ['Rhizophora mucronata', 10, 3, 1],
+    ] as [$species, $received, $planted, $damaged]) {
+        SeedlingInventory::create([
+            'restoration_site_id' => $site->id,
+            'recorded_by' => $menro->id,
+            'species_name' => $species,
+            'source_nursery' => 'Test nursery',
+            'date_received' => now()->toDateString(),
+            'beginning_stock' => 0,
+            'quantity_received' => $received,
+            'quantity_planted' => $planted,
+            'quantity_damaged' => $damaged,
+            'stage' => 'seedling',
+        ]);
+    }
+
+    $rows = $this->actingAs($menro)->getJson('/api/seedlings/summary')
+        ->assertOk()
+        ->json();
+
+    expect(count($rows))->toBe(2)
+        ->and(array_sum(array_column($rows, 'total_received')))->toBe(30)
+        ->and(array_sum(array_column($rows, 'total_planted')))->toBe(8)
+        ->and(array_sum(array_column($rows, 'total_damaged')))->toBe(3)
+        ->and(array_sum(array_column($rows, 'total_remaining')))->toBe(19)
+        ->and(collect($rows)->every(fn ($row) => is_int($row['total_planted']) && is_int($row['total_remaining'])))->toBeTrue();
+});
