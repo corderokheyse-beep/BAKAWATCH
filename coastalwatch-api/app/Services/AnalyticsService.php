@@ -80,7 +80,7 @@ class AnalyticsService
             'total'         => $totalRecords,
             'alive_count'   => $aliveCount,
             'dead_count'    => $deadCount,
-            'survival_rate' => $rate,
+            'survival_rate' => $denominator > 0 ? $rate : null,
 
             // Transparency / methodology fields
             'numerator'            => $numerator,

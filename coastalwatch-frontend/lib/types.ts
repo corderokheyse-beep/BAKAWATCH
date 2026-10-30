@@ -354,7 +354,7 @@ export interface SurvivalRateData {
   total: number
   alive_count: number
   dead_count: number
-  survival_rate: number
+  survival_rate: number | null
   // Transparency / methodology fields (added Phase 2a)
   numerator?: number
   denominator?: number

@@ -16,13 +16,13 @@ const centerTextPlugin = {
   id: 'centerText',
   afterDraw(chart: any) {
     const { ctx, chartArea: { width, height, left, top } } = chart
-    const rate = chart.data.datasets[0]?._survivalRate ?? 0
+    const rate = chart.data.datasets[0]?._survivalRate
     ctx.save()
     ctx.font = 'bold 24px Inter, sans-serif'
     ctx.fillStyle = '#111827'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(`${rate}%`, left + width / 2, top + height / 2)
+    ctx.fillText(rate == null ? '—' : `${rate}%`, left + width / 2, top + height / 2)
     ctx.restore()
   },
 }

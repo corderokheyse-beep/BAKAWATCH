@@ -3,15 +3,99 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
+use App\Models\EcosystemRecord;
+use App\Models\MonitoringRecord;
+use App\Models\PlantationRecord;
 use App\Models\RestorationSite;
+use App\Services\CloudinaryService;
 use App\Services\AnalyticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AnalyticsController extends Controller
 {
-    public function __construct(private AnalyticsService $analytics) {}
+    public function __construct(
+        private AnalyticsService $analytics,
+        private CloudinaryService $cloudinary,
+    ) {}
+
+    /** MENRO/admin — clear field observations while preserving restoration sites. */
+    public function resetRestorationData(Request $request): JsonResponse
+    {
+        $result = DB::transaction(function () use ($request) {
+            $siteIds = RestorationSite::withTrashed()
+                ->lockForUpdate()
+                ->pluck('id');
+            $plantations = PlantationRecord::query()
+                ->select(['id', 'image_public_id'])
+                ->lockForUpdate()
+                ->get();
+            $plantationIds = $plantations->pluck('id');
+            $monitoringCount = $plantationIds->isEmpty()
+                ? 0
+                : MonitoringRecord::whereIn('plantation_record_id', $plantationIds)->count();
+            $ecosystemCount = EcosystemRecord::whereIn('restoration_site_id', $siteIds)->count();
+            $plantedAreaSites = RestorationSite::withTrashed()
+                ->whereNotNull('planted_hectares')
+                ->where('planted_hectares', '!=', 0)
+                ->count();
+
+            if ($plantationIds->isNotEmpty()) {
+                MonitoringRecord::whereIn('plantation_record_id', $plantationIds)->delete();
+                PlantationRecord::whereIn('id', $plantationIds)->delete();
+            }
+
+            if ($siteIds->isNotEmpty()) {
+                EcosystemRecord::whereIn('restoration_site_id', $siteIds)->delete();
+                RestorationSite::withTrashed()
+                    ->whereIn('id', $siteIds)
+                    ->update(['planted_hectares' => 0]);
+            }
+
+            $counts = [
+                'sites_preserved' => $siteIds->count(),
+                'plantation_records_deleted' => $plantations->count(),
+                'monitoring_records_deleted' => $monitoringCount,
+                'ecosystem_records_deleted' => $ecosystemCount,
+                'planted_area_values_reset' => $plantedAreaSites,
+            ];
+            ActivityLog::record('restoration.analytics_reset', null, [], $counts);
+
+            return [
+                ...$counts,
+                'public_ids' => $plantations->pluck('image_public_id')->filter()->unique()->values()->all(),
+            ];
+        });
+
+        $mediaCleanupFailed = false;
+        foreach ($result['public_ids'] as $publicId) {
+            try {
+                if (! $this->cloudinary->delete($publicId)) {
+                    $mediaCleanupFailed = true;
+                    Log::warning('Restoration analytics reset left a plantation image in storage.', [
+                        'public_id' => $publicId,
+                    ]);
+                }
+            } catch (\Throwable $exception) {
+                $mediaCleanupFailed = true;
+                Log::warning('Restoration analytics reset could not remove a plantation image.', [
+                    'public_id' => $publicId,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        unset($result['public_ids']);
+
+        return response()->json([
+            'message' => 'Restoration activity data was cleared. Site records and site areas were preserved.',
+            ...$result,
+            'media_cleanup_failed' => $mediaCleanupFailed,
+        ]);
+    }
 
     /** menro / admin — full analytics for a site */
     public function show(RestorationSite $restorationSite, Request $request): JsonResponse

@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import axios from 'axios'
 import { fetchSites } from '@/lib/mangrove-api'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
@@ -12,9 +13,10 @@ import SidebarLayout from '@/components/layout/SidebarLayout'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { cn } from '@/lib/utils'
 import type { RestorationSite } from '@/lib/types'
+import toast from 'react-hot-toast'
 import {
   BarChart2, MapPin, TreePine, TrendingUp, ArrowRight,
-  Leaf, Search, X, AlertTriangle,
+  Leaf, Search, X, AlertTriangle, RotateCcw,
   Sprout, Clock, Ban, AlertCircle,
 } from 'lucide-react'
 
@@ -85,6 +87,9 @@ export default function AnalyticsIndexPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [barangayFilter, setBarangayFilter] = useState('')
   const [sortKey, setSortKey]       = useState<SortKey>('name')
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [resetConfirmation, setResetConfirmation] = useState('')
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -143,6 +148,36 @@ export default function AnalyticsIndexPage() {
     ? Math.round(sitesWithRate.reduce((s, x) => s + Number(x.survival_rate ?? 0), 0) / sitesWithRate.length)
     : null
   const needsAttention = sites.filter(s => s.survival_rate != null && s.survival_rate < 40).length
+  const canResetRestorationData = user?.role === 'menro' || user?.role === 'admin'
+
+  async function resetRestorationData() {
+    if (resetConfirmation !== 'RESET RESTORATION DATA') return
+    setResetting(true)
+    try {
+      const { data } = await api.post('/analytics/reset-restoration-data')
+      setResetModalOpen(false)
+      setResetConfirmation('')
+      toast.success(
+        `Restoration activity cleared. ${data.sites_preserved} site records and their areas were preserved.`
+      )
+      if (data.media_cleanup_failed) {
+        toast.error('Some plantation photos could not be removed from storage.')
+      }
+      try {
+        setSites(await fetchSites())
+      } catch (error) {
+        console.error('Restoration data reset succeeded, but analytics could not refresh.', error)
+        toast.error('Reset completed, but analytics could not refresh. Reload this page.')
+      }
+    } catch (error: unknown) {
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined
+      toast.error(message ?? 'Could not reset restoration data.')
+    } finally {
+      setResetting(false)
+    }
+  }
 
   if (authLoading || loading) return (
     <SidebarLayout title="Analytics" subtitle="Site-level restoration analytics">
@@ -182,12 +217,24 @@ export default function AnalyticsIndexPage() {
       <div className="page-container space-y-6">
 
         {/* Header */}
-        <div className="animate-slide-up">
-          <p className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-1">Analytics</p>
-          <h1 className="page-title">Restoration Analytics</h1>
-          <p className="page-subtitle">
-            Overview of all restoration sites — survival rates, species distribution, growth trends and ecosystem data.
-          </p>
+        <div className="animate-slide-up flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-primary-600 uppercase tracking-widest mb-1">Analytics</p>
+            <h1 className="page-title">Restoration Analytics</h1>
+            <p className="page-subtitle">
+              Overview of all restoration sites — survival rates, species distribution, growth trends and ecosystem data.
+            </p>
+          </div>
+          {canResetRestorationData && (
+            <button
+              type="button"
+              onClick={() => { setResetConfirmation(''); setResetModalOpen(true) }}
+              className="btn-secondary shrink-0 gap-2 text-red-700 hover:bg-red-50 hover:border-red-200"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset restoration activity
+            </button>
+          )}
         </div>
 
         {/* ── Summary cards ──────────────────────────────────────────────────── */}
@@ -482,6 +529,61 @@ export default function AnalyticsIndexPage() {
           </div>
         )}
       </div>
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="reset-restoration-title"
+            aria-describedby="reset-restoration-description"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+          >
+            <div className="px-6 py-4 border-b border-red-100 bg-red-50">
+              <h2 id="reset-restoration-title" className="font-bold text-red-900">Reset restoration activity data?</h2>
+            </div>
+            <div className="p-6 space-y-3">
+              <p id="reset-restoration-description" className="text-sm text-gray-700">
+                This permanently deletes plantation records, their monitoring records, and ecosystem observations,
+                and sets planted-hectares values to zero.
+              </p>
+              <p className="text-sm text-gray-600">
+                Restoration sites, names, locations, boundaries, total area, assignments, and species setup are preserved.
+                Inventory, reports, events, and event accomplishments are not changed.
+              </p>
+              <label htmlFor="reset-restoration-confirmation" className="block text-xs font-bold text-gray-700">
+                Type RESET RESTORATION DATA to confirm
+              </label>
+              <input
+                id="reset-restoration-confirmation"
+                autoComplete="off"
+                value={resetConfirmation}
+                onChange={event => setResetConfirmation(event.target.value)}
+                disabled={resetting}
+                className="input w-full"
+                placeholder="RESET RESTORATION DATA"
+              />
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetModalOpen(false)}
+                  disabled={resetting}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={resetRestorationData}
+                  disabled={resetting || resetConfirmation !== 'RESET RESTORATION DATA'}
+                  className="btn-danger flex-1"
+                >
+                  {resetting ? 'Resetting…' : 'Permanently Reset'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarLayout>
   )
 }

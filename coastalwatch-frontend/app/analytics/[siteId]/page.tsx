@@ -297,11 +297,11 @@ export default function SiteAnalyticsPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger">
           <KpiCard
             label="Survival Rate"
-            value={`${sr.survival_rate}%`}
-            sub={`${sr.alive_count} alive / ${sr.total} total`}
+            value={sr.survival_rate == null ? '—' : `${sr.survival_rate}%`}
+            sub={sr.total === 0 ? 'No planting records' : `${sr.alive_count} alive / ${sr.total} total`}
             icon={TrendingUp}
-            color="text-green-600"
-            bg="bg-green-50"
+            color={sr.survival_rate == null ? 'text-gray-400' : 'text-green-600'}
+            bg={sr.survival_rate == null ? 'bg-gray-50' : 'bg-green-50'}
           />
           <KpiCard
             label="Total Planted"
@@ -406,7 +406,9 @@ export default function SiteAnalyticsPage() {
                 <p className="text-sm text-gray-700 font-mono">{sr.formula}</p>
                 <p className="text-sm text-gray-700 mt-2">
                   = ({sr.numerator ?? sr.alive_count} living ÷ {sr.denominator ?? sr.total} eligible) × 100 ={' '}
-                  <span className="font-bold text-green-600">{sr.survival_rate}%</span>
+                  <span className="font-bold text-green-600">
+                    {sr.survival_rate == null ? '—' : `${sr.survival_rate}%`}
+                  </span>
                 </p>
               </div>
 

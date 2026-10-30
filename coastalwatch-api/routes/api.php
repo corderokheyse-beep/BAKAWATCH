@@ -329,6 +329,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/analytics/{restorationSite}/predict-growth', [AnalyticsController::class, 'predictGrowth']);
     });
 
+    Route::middleware('role:menro,admin')->post(
+        '/analytics/reset-restoration-data',
+        [AnalyticsController::class, 'resetRestorationData']
+    );
+
     // menro + admin + staff can manage events and access site data
     Route::middleware('role:menro,admin,staff')->group(function () {
         Route::post('/sites/{restorationSite}/photos', [SitePhotoController::class, 'store']);

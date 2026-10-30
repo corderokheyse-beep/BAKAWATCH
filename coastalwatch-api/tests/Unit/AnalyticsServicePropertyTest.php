@@ -254,13 +254,13 @@ test('Property 20: survival rate equals (alive_count / total) * 100 rounded to 2
 });
 
 // ---------------------------------------------------------------------------
-// Property 20b: Survival rate is 0.0 when there are no plantation records
+// Property 20b: Survival rate is unavailable when there are no plantation records
 //
-// Edge case: when total = 0, survival_rate SHALL be 0.0 (no division by zero).
+// Edge case: when total = 0, survival_rate SHALL be null (no data, not a 0% result).
 //
 // Validates: Requirements 10.2
 // ---------------------------------------------------------------------------
-test('Property 20b: survival rate is 0.0 when total plantation records is zero (10 iterations)', function () {
+test('Property 20b: survival rate is null when total plantation records is zero (10 iterations)', function () {
     $iterations = 10;
 
     for ($i = 0; $i < $iterations; $i++) {
@@ -282,8 +282,8 @@ test('Property 20b: survival rate is 0.0 when total plantation records is zero (
         $service = new AnalyticsService();
         $result  = $service->survivalRate($siteId);
 
-        expect($result['survival_rate'])->toBe(0.0,
-            "Iteration {$i}: survival_rate should be 0.0 when total is 0"
+        expect($result['survival_rate'])->toBeNull(
+            "Iteration {$i}: survival_rate should be null when total is 0"
         );
         expect($result['total'])->toBe(0,
             "Iteration {$i}: total should be 0"
