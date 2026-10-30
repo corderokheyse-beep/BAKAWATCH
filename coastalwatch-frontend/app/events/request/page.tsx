@@ -28,14 +28,13 @@ interface FormData {
   target_species: number[]
   seedling_quantities: Record<string, string>
   expected_participants: string
-  seedlings_requested: string
   purpose: string
 }
 
 const empty = (): FormData => ({
   organization_name: '', contact_person: '', contact_email: '', contact_phone: '', contact_address: '',
   event_name: '', description: '', preferred_date: '', preferred_location: '',
-  preferred_restoration_site_id: '', target_species: [], seedling_quantities: {}, expected_participants: '', seedlings_requested: '', purpose: '',
+  preferred_restoration_site_id: '', target_species: [], seedling_quantities: {}, expected_participants: '', purpose: '',
 })
 
 export default function EventRequestPage() {
@@ -51,6 +50,7 @@ export default function EventRequestPage() {
   const [availabilityLoading, setAvailabilityLoading] = useState(true)
   const [availabilityError, setAvailabilityError] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [legacySeedlingQuantities, setLegacySeedlingQuantities] = useState(false)
   const [confirmSubmit, setConfirmSubmit] = useState(false)
 
   const loadSeedlingAvailability = useCallback(async (siteId?: string) => {
@@ -80,16 +80,20 @@ export default function EventRequestPage() {
         const request = (Array.isArray(data) ? data : data?.data ?? []).find((row: any) => Number(row.id) === requestedEditId)
         if (!request || request.status !== 'pending') { toast.error('Only your pending requests can be edited.'); return }
         setEditingId(request.id)
-        const targetSpecies = (request.target_species ?? []).map(Number)
-        const seedlingQuantities = request.seedling_quantities ?? (
-          targetSpecies.length && request.seedlings_requested
-            ? { [targetSpecies[0]]: String(request.seedlings_requested) }
+        const targetSpecies: number[] = (request.target_species ?? []).map((id: number) => Number(id))
+        const savedQuantities = request.seedling_quantities as Record<string, number> | null
+        const hasSavedQuantities = Boolean(savedQuantities && Object.keys(savedQuantities).length)
+        const isAmbiguousLegacyTotal = !hasSavedQuantities && targetSpecies.length > 1 && Number(request.seedlings_requested) > 0
+        setLegacySeedlingQuantities(isAmbiguousLegacyTotal)
+        const seedlingQuantities = hasSavedQuantities
+          ? savedQuantities!
+          : targetSpecies.length === 1 && Number(request.seedlings_requested) > 0
+            ? { [targetSpecies[0]]: Number(request.seedlings_requested) }
             : {}
-        )
         setForm({
           organization_name: request.organization_name ?? '', contact_person: request.contact_person ?? '', contact_email: request.contact_email ?? '', contact_phone: request.contact_phone ?? '', contact_address: request.contact_address ?? '',
           event_name: request.event_name ?? '', description: request.description ?? '', preferred_date: request.preferred_date?.slice(0, 10) ?? '', preferred_location: request.preferred_location ?? '',
-          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: targetSpecies, seedling_quantities: Object.fromEntries(Object.entries(seedlingQuantities).map(([id, quantity]) => [id, String(quantity)])), expected_participants: String(request.expected_participants ?? ''), seedlings_requested: String(request.seedlings_requested ?? ''), purpose: request.purpose ?? '',
+          preferred_restoration_site_id: String(request.preferred_restoration_site_id ?? ''), target_species: targetSpecies, seedling_quantities: Object.fromEntries(targetSpecies.map(id => [String(id), String(seedlingQuantities[id] ?? '')])), expected_participants: String(request.expected_participants ?? ''), purpose: request.purpose ?? '',
         })
       }).catch(() => toast.error('Could not load this event request for editing.'))
     }
@@ -167,10 +171,15 @@ export default function EventRequestPage() {
         const available = availableForSpecies(item)
         if (available > 0) {
           nextTargetSpecies.push(id)
-          const currentQty = Number.parseInt(current.seedling_quantities[id] || '1', 10) || 1
-          const clampedQty = Math.min(currentQty, available)
-          nextQuantities[id] = String(clampedQty)
-          if (clampedQty !== currentQty) changed = true
+          const rawQuantity = current.seedling_quantities[id] ?? ''
+          const parsedQuantity = Number.parseInt(rawQuantity, 10)
+          const nextQuantity = rawQuantity.trim() === ''
+            ? ''
+            : Number.isFinite(parsedQuantity)
+              ? String(Math.min(parsedQuantity, available))
+              : '1'
+          nextQuantities[id] = nextQuantity
+          if (nextQuantity !== rawQuantity) changed = true
         } else {
           changed = true
         }
@@ -271,7 +280,7 @@ export default function EventRequestPage() {
               <Link href={user ? '/volunteer/requests' : '/events'} className="btn-primary gap-2">
                 <Calendar className="w-4 h-4" /> {user ? 'View My Requests' : 'View Events'}
               </Link>
-              {!editingId && <button onClick={() => { setForm(empty()); setSubmitted(false) }} className="btn-secondary">
+              {!editingId && <button onClick={() => { setForm(empty()); setLegacySeedlingQuantities(false); setSubmitted(false) }} className="btn-secondary">
                 Submit Another
               </button>}
             </div>
@@ -398,7 +407,7 @@ export default function EventRequestPage() {
               {errors.event_name && <p className="text-xs text-red-500 mt-1">{errors.event_name}</p>}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="label">Preferred Date *</label>
                 <div className="relative">
@@ -421,13 +430,6 @@ export default function EventRequestPage() {
                 </div>
                 {errors.expected_participants && <p className="text-xs text-red-500 mt-1">{errors.expected_participants}</p>}
               </div>
-              <div>
-                <label className="label">Seedlings Requested *</label>
-                <input type="number" min={1} step={1} className={cn('input bg-gray-50', errors.seedlings_requested && 'border-red-400')}
-                  value={requestedSeedlings} readOnly aria-readonly="true" />
-                <p className="mt-1 text-xs text-gray-500">Calculated from the species quantities below.</p>
-                {errors.seedlings_requested && <p className="text-xs text-red-500 mt-1">{errors.seedlings_requested}</p>}
-              </div>
             </div>
 
             <div>
@@ -439,6 +441,11 @@ export default function EventRequestPage() {
 
             <div>
               <label className="label">Target Mangrove Species *</label>
+              {legacySeedlingQuantities && (
+                <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  This older request saved only a combined total for multiple species. No per-species quantities were recorded, so enter the quantity for each species below before saving.
+                </p>
+              )}
               <div className="mt-1 grid max-h-64 grid-cols-1 gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3 sm:grid-cols-2">
                 {species.map(item => {
                   const available = availableForSpecies(item)
@@ -470,6 +477,24 @@ export default function EventRequestPage() {
                   </div>
                 })}
               </div>{errors.target_species && <p className="mt-1 text-xs text-red-500">{errors.target_species}</p>}
+              <div className={cn('mt-3 rounded-xl border p-4', errors.seedlings_requested ? 'border-red-200 bg-red-50' : 'border-emerald-100 bg-emerald-50')}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-gray-800">Total seedlings requested</span>
+                  <span className="text-lg font-bold tabular-nums text-emerald-800">{requestedSeedlings.toLocaleString()}</span>
+                </div>
+                {selectedSpecies.length > 0 && <ul className="mt-2 space-y-1 border-t border-emerald-100 pt-2 text-xs text-gray-600">
+                  {selectedSpecies.map(item => (
+                    <li key={item.id} className="flex justify-between gap-3">
+                      <span>{item.local_name || item.scientific_name}</span>
+                      <span className="font-semibold text-gray-800">
+                        {Number(form.seedling_quantities[item.id] || 0).toLocaleString()} seedlings
+                      </span>
+                    </li>
+                  ))}
+                </ul>}
+                <p className="mt-2 text-[11px] text-gray-500">This total is calculated from the individual species quantities above.</p>
+                {errors.seedlings_requested && <p className="mt-2 text-xs font-medium text-red-700">{errors.seedlings_requested}</p>}
+              </div>
             </div>
 
             <div>

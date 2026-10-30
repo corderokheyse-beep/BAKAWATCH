@@ -95,7 +95,7 @@ test('event accomplishments deduct planted seedlings once from available invento
             'photos' => [UploadedFile::fake()->image('insufficient-stock.jpg')],
         ]), ['Accept' => 'application/json'])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('seedlings_planted');
+        ->assertJsonValidationErrors('plantings');
 
     expect(EventAccomplishmentReport::where('planting_event_id', $secondEvent->id)->exists())->toBeFalse()
         ->and(InventoryMovement::where('seedling_inventory_id', $inventory->id)->where('type', 'planted_out')->sum('quantity'))->toBe(-3);
