@@ -22,6 +22,7 @@ import {
   ChevronRight, Radio, Sprout, Ban,
   User as UserIcon, Loader2, ShieldAlert, Download,
   ChevronDown, ListTree, Maximize2, ImageIcon,
+  Trash2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -151,6 +152,8 @@ function MapPageInner() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null)
+  const [deletingReport, setDeletingReport] = useState(false)
   const [selectedSite, setSelectedSite]     = useState<RestorationSite | null>(null)
   const [siteDetailLoading, setSiteDetailLoading] = useState(false)
   const [panelMode, setPanelMode]           = useState<PanelMode>(null)
@@ -300,6 +303,22 @@ function MapPageInner() {
     setSelectedSite(null)
     setPanelMode(null)
     setShowTimeline(false)
+  }
+
+  async function deleteSelectedReport() {
+    if (!reportToDelete) return
+    setDeletingReport(true)
+    try {
+      await api.delete(`/reports/${reportToDelete.id}`)
+      setReports(prev => prev.filter(report => report.id !== reportToDelete.id))
+      if (selectedReport?.id === reportToDelete.id) closePanel()
+      setReportToDelete(null)
+      toast.success('Report deleted.')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? 'Could not delete the report.')
+    } finally {
+      setDeletingReport(false)
+    }
   }
 
   const selectedReportPhotoUrls = getReportPhotoUrls(selectedReport).filter(url => !failedPhotoUrls[url])
@@ -582,6 +601,15 @@ function MapPageInner() {
                         {downloading === 'report'
                           ? <Loader2 className="w-4 h-4 animate-spin" />
                           : <Download className="w-4 h-4" />}
+                      </button>
+                    )}
+                    {canDownload && (
+                      <button
+                        onClick={() => setReportToDelete(selectedReport)}
+                        title="Delete report"
+                        aria-label={`Delete report: ${selectedReport.title}`}
+                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors">
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                     <button onClick={closePanel} className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
@@ -897,6 +925,43 @@ function MapPageInner() {
             </div>{/* ── end single scroll region ── */}
           </div>
         </div>
+
+        {reportToDelete && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="map-delete-report-title"
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="px-5 py-4 border-b border-red-100 bg-red-50">
+                <h2 id="map-delete-report-title" className="font-bold text-red-900">Delete report?</h2>
+                <p className="text-sm text-red-800 mt-1 font-semibold">{reportToDelete.title}</p>
+              </div>
+              <div className="p-5">
+                <p className="text-sm text-gray-600">
+                  This permanently removes the report from the map and report lists. This cannot be undone.
+                </p>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setReportToDelete(null)}
+                    disabled={deletingReport}
+                    className="btn-secondary flex-1">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteSelectedReport}
+                    disabled={deletingReport}
+                    className="btn-danger flex-1">
+                    {deletingReport ? 'Deleting…' : 'Delete Report'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Lightbox modal */}
         {lightboxUrl && (
