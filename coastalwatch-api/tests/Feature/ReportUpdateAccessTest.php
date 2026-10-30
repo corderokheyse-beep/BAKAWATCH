@@ -106,3 +106,32 @@ test('timeline resolves baseline and update photos when image_url is missing', f
         ->assertJsonPath('updates.0.image_url', 'https://images.example/follow-up.jpg')
         ->assertJsonPath('updates.0.photos.0.url', 'https://images.example/follow-up.jpg');
 });
+
+test('MENRO can delete a report while regular users cannot delete another users report', function () {
+    $reportOwner = User::factory()->create(['role' => 'field_worker']);
+    $otherFieldWorker = User::factory()->create(['role' => 'field_worker']);
+    $menro = User::factory()->create(['role' => 'menro']);
+    $report = Report::create([
+        'user_id' => $reportOwner->id,
+        'title' => 'Test threat report',
+        'description' => 'Report for deletion authorization test',
+        'latitude' => 12.9,
+        'longitude' => 121.5,
+        'status' => 'pending',
+        'category' => 'damage',
+    ]);
+
+    $this->actingAs($otherFieldWorker)
+        ->deleteJson("/api/reports/{$report->id}")
+        ->assertForbidden();
+
+    expect(Report::find($report->id))->not->toBeNull();
+
+    $this->actingAs($menro)
+        ->deleteJson("/api/reports/{$report->id}")
+        ->assertOk()
+        ->assertJsonPath('message', 'Report deleted.');
+
+    expect(Report::find($report->id))->toBeNull()
+        ->and(Report::withTrashed()->find($report->id)?->trashed())->toBeTrue();
+});

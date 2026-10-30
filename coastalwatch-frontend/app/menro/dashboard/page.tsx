@@ -21,7 +21,7 @@ import {
   Leaf, FileText, ChevronRight,
   MapPin, CalendarDays, ClipboardCheck,
   CheckCircle, XCircle, Clock, Plus,
-  AlertTriangle, Users, Sparkles, Sprout, Inbox, Search,
+  AlertTriangle, Users, Sparkles, Sprout, Inbox, Search, Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -55,6 +55,8 @@ export default function MenroDashboardPage() {
   const [eventTab, setEventTab]             = useState<'upcoming' | 'completed' | 'requests'>('upcoming')
   const [loading, setLoading]               = useState(true)
   const [reviewing, setReviewing]           = useState<number | null>(null)
+  const [reportToDelete, setReportToDelete] = useState<{ id: number; title: string } | null>(null)
+  const [deletingReport, setDeletingReport] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -97,6 +99,21 @@ export default function MenroDashboardPage() {
       toast.error('Failed to update report')
     } finally {
       setReviewing(null)
+    }
+  }
+
+  async function deleteReport() {
+    if (!reportToDelete) return
+    setDeletingReport(true)
+    try {
+      await api.delete(`/reports/${reportToDelete.id}`)
+      setReports(prev => prev.filter(report => report.id !== reportToDelete.id))
+      toast.success('Report deleted.')
+      setReportToDelete(null)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? 'Failed to delete report.')
+    } finally {
+      setDeletingReport(false)
     }
   }
 
@@ -384,7 +401,7 @@ export default function MenroDashboardPage() {
                     </div>
                     {isPending && (
                       <>
-                        <div className="hidden sm:flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        <div className="hidden sm:flex gap-1.5 shrink-0"
                              onClick={e => e.stopPropagation()}>
                           <button
                             onClick={() => reviewReport(report.id, 'resolved')}
@@ -404,6 +421,16 @@ export default function MenroDashboardPage() {
                           >
                             <Search className="w-3.5 h-3.5" /> Under Review
                           </button>
+                          <button
+                            onClick={() => setReportToDelete({ id: report.id, title: report.title })}
+                            disabled={deletingReport}
+                            aria-label={`Delete report: ${report.title}`}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700
+                                       hover:bg-red-100 hover:shadow-sm text-xs font-semibold
+                                       transition-all duration-150 disabled:opacity-50 active:scale-95"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
                         </div>
                         {/* Always-visible buttons on mobile */}
                         <div className="col-start-2 flex w-full justify-end gap-1.5 sm:hidden"
@@ -417,6 +444,14 @@ export default function MenroDashboardPage() {
                             aria-label="Mark report under review"
                             className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50">
                             <Search className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setReportToDelete({ id: report.id, title: report.title })}
+                            disabled={deletingReport}
+                            aria-label={`Delete report: ${report.title}`}
+                            className="p-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </>
@@ -571,6 +606,45 @@ export default function MenroDashboardPage() {
         </div>
 
       </div>
+      {reportToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-report-title"
+            aria-describedby="delete-report-description"
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+          >
+            <div className="px-6 py-4 border-b border-red-100 bg-red-50">
+              <h2 id="delete-report-title" className="font-bold text-red-900">Delete report?</h2>
+              <p className="text-sm text-red-800 mt-1 font-semibold">{reportToDelete.title}</p>
+            </div>
+            <div className="p-6">
+              <p id="delete-report-description" className="text-sm text-gray-600">
+                This removes the report from the dashboard and reports list. You cannot undo this from the dashboard.
+              </p>
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setReportToDelete(null)}
+                  disabled={deletingReport}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteReport}
+                  disabled={deletingReport}
+                  className="btn-danger flex-1"
+                >
+                  {deletingReport ? 'Deleting…' : 'Delete Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarLayout>
   )
 }

@@ -14,7 +14,7 @@ class ReportPolicy
 
     public function delete(User $user, Report $report): bool
     {
-        return $user->id === $report->user_id || $user->isStaff();
+        return $user->id === $report->user_id || $user->isStaff() || $user->role === 'menro';
     }
 
     public function review(User $user): bool
