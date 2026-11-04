@@ -115,10 +115,9 @@ Start the classifier from its directory:
 
 ```powershell
 cd ml-service
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-py -m pip install -r requirements.txt
-py -m uvicorn main:app --host 0.0.0.0 --port 8001
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
 The service health endpoint is `http://127.0.0.1:8001/`; image classification uses `POST /predict`. The classifier expects `mangrove_model.keras` and `class_labels.json` alongside `main.py`. The trained model is a large binary asset; use Git LFS or a secure model artifact store if it is too large for the repository hosting plan. Training datasets and virtual environments should not be committed.
@@ -151,7 +150,7 @@ A practical hosted layout is:
 1. Deploy `coastalwatch-frontend/` to **Vercel** or another Next.js host.
 2. Deploy `coastalwatch-api/` to **Railway**, **Render**, or a managed PHP host.
 3. Provision managed PostgreSQL or MySQL and configure Laravel's `DB_*` variables.
-4. Deploy `ml-service/` as a separate Python web service if species detection is required.
+4. Deploy `ml-service/` as a separate Python web service if species detection is required. On Render, set the root directory to `ml-service`, the build command to `pip install -r requirements.txt`, and the start command to `uvicorn main:app --host 0.0.0.0 --port $PORT`. TensorFlow 2.21 requires Python 3.13 or earlier; the checked-in `.python-version` selects Python 3.13.4. The API's `ML_SERVICE_URL` must be the classifier's base URL (for example, `https://bakawatch-ml-service.onrender.com`).
 5. Configure Cloudinary for user uploads, or select and configure the S3 filesystem disk (`FILESYSTEM_DISK=s3`, bucket, region, and credentials or an instance role). Ensure the bucket/CDN serves uploaded images publicly. Local-disk uploads are limited to local development and tests; hosted environments reject uploads when no durable storage is configured rather than returning URLs that will break after a restart or deployment.
 6. Set `NEXT_PUBLIC_API_URL`, `CORS_ALLOWED_ORIGINS`, `FRONTEND_URL`, `ML_SERVICE_URL`, and email settings to the production service URLs.
 7. The Field Worker and Volunteer dashboards show a five-day weather forecast from Open-Meteo at the configured Gloria coordinates. No API key is required. The free API is intended for non-commercial use; review Open-Meteo's current terms and attribution requirements before production use.
