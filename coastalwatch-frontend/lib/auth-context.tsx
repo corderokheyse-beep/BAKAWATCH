@@ -36,6 +36,15 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+function isInvalidFirebaseCredentials(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false
+
+  return (
+    typeof error.code === 'string' &&
+    ['auth/invalid-credential', 'auth/user-not-found', 'auth/wrong-password'].includes(error.code)
+  )
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]     = useState<User | null>(null)
   const [token, setToken]   = useState<string | null>(null)
@@ -91,10 +100,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshUser])
 
-  // Login via Firebase, then exchange the verified ID token for a Sanctum session.
+  // Prefer Firebase; fall back to password-hash auth for accounts not yet migrated.
   const login = async (email: string, password: string) => {
-    const idToken = await firebaseSignIn(email, password)
-    const { data } = await api.post('/auth/firebase', { id_token: idToken })
+    let data
+    try {
+      const idToken = await firebaseSignIn(email, password)
+      const response = await api.post('/auth/firebase', { id_token: idToken })
+      data = response.data
+    } catch (error) {
+      if (!isInvalidFirebaseCredentials(error)) throw error
+
+      const response = await api.post('/auth/login', { email, password })
+      data = response.data
+    }
+
     Cookies.set('token', data.token, { expires: 7, sameSite: 'lax' })
     setToken(data.token)
     setUser(data.user)

@@ -103,6 +103,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Sign-in checks Firebase first, then supports existing API accounts that have
+not yet been migrated to Firebase. New registrations use Firebase. If both
+sign-in methods reject the credentials, register the account or reset its
+password; the application cannot create or reset an account just by entering
+credentials on the login screen.
+
 ### 3. Mangrove species classifier (optional)
 
 The web application can run without the classifier, but AI species detection will not be available. Configure `ML_SERVICE_URL` in the API `.env` to point to the classifier service. For local development it is:

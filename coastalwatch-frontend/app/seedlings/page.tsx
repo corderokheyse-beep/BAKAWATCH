@@ -52,6 +52,13 @@ interface FormState {
 // The single, fixed seedling source (only one nursery supplies the LGU).
 const DEFAULT_SOURCE = 'LGU Nursery'
 
+const DESTINATION_SITE_AREAS = ['tambong', 'balete', 'sta theresa', 'agsalin']
+
+function destinationSiteAreaIndex(name: string): number {
+  const normalizedName = name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return DESTINATION_SITE_AREAS.findIndex(area => normalizedName.includes(area))
+}
+
 // Per-field inline validation errors.
 type FormErrors = Partial<Record<keyof FormState, string>>
 
@@ -114,6 +121,9 @@ export default function SeedlingsPage() {
   const [ledgerTotals, setLedgerTotals] = useState<Record<number, { planted_out: number; lost: number; stock_in: number }>>({})
 
   const isManager = ['admin', 'staff', 'menro'].includes(user?.role ?? '')
+  const destinationSites = sites
+    .filter(site => destinationSiteAreaIndex(site.name) !== -1)
+    .sort((a, b) => destinationSiteAreaIndex(a.name) - destinationSiteAreaIndex(b.name))
 
   useEffect(() => {
     if (authLoading) return
@@ -740,7 +750,7 @@ export default function SeedlingsPage() {
                         onChange={e => { setForm(f => ({ ...f, restoration_site_id: e.target.value })); setErrors(x => ({ ...x, restoration_site_id: undefined })) }}
                       >
                         <option value="" disabled>Select restoration site</option>
-                        {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {destinationSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                       {errors.restoration_site_id && <p className="err-msg">{errors.restoration_site_id}</p>}
                     </div>
@@ -906,7 +916,7 @@ export default function SeedlingsPage() {
                           onChange={e => { setForm(f => ({ ...f, restoration_site_id: e.target.value })); setErrors(x => ({ ...x, restoration_site_id: undefined })) }}
                         >
                           <option value="">{disabled ? 'No release — not needed' : 'Select restoration site'}</option>
-                          {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          {destinationSites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                         {errors.restoration_site_id && <p className="err-msg">{errors.restoration_site_id}</p>}
                       </div>
