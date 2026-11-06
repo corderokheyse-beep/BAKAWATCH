@@ -45,7 +45,7 @@ export function getNavLinks(role?: string): NavLink[] {
         { href: '/seedlings',        label: 'Inventory',  icon: Sprout },
         { href: '/reports/mangrove', label: 'Reports',         icon: FileText },
         { href: '/analytics',        label: 'Analytics',       icon: BarChart2 },
-        { href: '/articles/manage',  label: 'Tips & Guides',   icon: BookOpen },
+        { href: '/articles',         label: 'Tips & Guides',   icon: BookOpen },
       ]
 
     case 'menro':
@@ -57,7 +57,7 @@ export function getNavLinks(role?: string): NavLink[] {
         { href: '/seedlings',        label: 'Inventory',   icon: Sprout },
         { href: '/reports/mangrove', label: 'Reports',          icon: FileText },
         { href: '/analytics',        label: 'Analytics',        icon: BarChart2 },
-        { href: '/articles/manage',  label: 'Tips & Guides',    icon: BookOpen },
+        { href: '/articles',         label: 'Tips & Guides',    icon: BookOpen },
       ]
 
     case 'field_worker':

@@ -50,6 +50,95 @@ const SPECIES_GUIDE: Record<string, { zone: string; root: string; benefits: stri
   'heritiera littoralis': { zone: 'Landward / coastal transition', root: 'Buttress roots', benefits: 'Provides canopy and helps stabilize the forest edge.' },
 }
 
+const PROPAGULE_TYPE_GUIDE = {
+  category: 'Species',
+  title: 'Mangrove Species by Propagule Type',
+  body: 'Identify common mangroves by the shape and behavior of their propagules. Propagules are dispersal structures that develop into seedlings and, over time, mature trees.',
+  groups: [
+    {
+      title: 'Pencil- or torpedo-shaped propagules',
+      description: 'Rhizophoraceae species produce elongated propagules that may drop into the mud or float upright.',
+      species: [
+        { name: 'Bakauan Lalaki', scientificName: 'Rhizophora apiculata', detail: 'Smooth, long green propagules; arching stilt roots.' },
+        { name: 'Bakauan Babae', scientificName: 'Rhizophora mucronata', detail: 'Long, rough, warty propagules.' },
+        { name: 'Bakauan Bato', scientificName: 'Rhizophora stylosa', detail: 'Common in sandy or rocky intertidal zones.' },
+        { name: 'Busain / Bruguiera', scientificName: 'Bruguiera gymnorrhiza, B. sexangula', detail: 'Cigar-shaped propagules and characteristic knee roots.' },
+        { name: 'Pototan / Ceriops', scientificName: 'Ceriops tagal, C. decandra', detail: 'Slender, ribbed propagules and small buttress roots.' },
+      ],
+    },
+    {
+      title: 'Bean-, coin-, or capsule-shaped propagules',
+      description: 'These species have cryptoviviparous seeds: the embryo begins developing while remaining inside the fruit casing.',
+      species: [
+        { name: 'Api-api / Bungalon', scientificName: 'Avicennia marina, Avicennia alba', detail: 'Flat, heart- or bean-shaped propagules; pencil-like breathing roots (pneumatophores).' },
+        { name: 'Tabao / Lumnitzera', scientificName: 'Lumnitzera racemosa', detail: 'Small, buoyant, vase-shaped fruits.' },
+      ],
+    },
+    {
+      title: 'Large nut- or cannonball-shaped fruits',
+      description: 'Large, woody fruits or fibrous seed clusters can float and later release individual seeds.',
+      species: [
+        { name: 'Tabigi / Cannonball Mangrove', scientificName: 'Xylocarpus granatum', detail: 'Large, round woody fruits containing wedge-shaped seeds.' },
+        { name: 'Nipa Palm', scientificName: 'Nypa fruticans', detail: 'A mangrove-associated palm with woody, globular seed clusters that break into floating seeds.' },
+      ],
+    },
+  ],
+}
+
+function PropaguleTypeGuideCard() {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <>
+      <article className="group flex h-full flex-col rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300 hover:shadow-lg">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-800">
+            <Tag className="h-3 w-3" />{PROPAGULE_TYPE_GUIDE.category}
+          </span>
+          <span className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><Sprout className="h-4 w-4" /></span>
+        </div>
+        <h3 className="mt-4 text-base font-bold text-gray-900">{PROPAGULE_TYPE_GUIDE.title}</h3>
+        <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{PROPAGULE_TYPE_GUIDE.body}</p>
+        <button type="button" onClick={() => setIsOpen(true)} className="mt-4 flex w-full items-center justify-between border-t border-gray-100 pt-3 text-left text-xs font-semibold text-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600">
+          <span>Explore propagule types</span><ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </button>
+      </article>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/50 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setIsOpen(false) }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="propagule-guide-title" className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50 to-white px-6 py-5">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-800"><Tag className="h-3 w-3" /> Species field guide</span>
+                <h2 id="propagule-guide-title" className="mt-3 text-xl font-bold text-gray-900">{PROPAGULE_TYPE_GUIDE.title}</h2>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">{PROPAGULE_TYPE_GUIDE.body}</p>
+              </div>
+              <button type="button" autoFocus aria-label="Close propagule guide" onClick={() => setIsOpen(false)} className="shrink-0 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              {PROPAGULE_TYPE_GUIDE.groups.map(group => (
+                <section key={group.title} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                  <h3 className="font-bold text-gray-900">{group.title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">{group.description}</p>
+                  <ul className="mt-3 space-y-3">
+                    {group.species.map(species => (
+                      <li key={species.scientificName} className="border-t border-gray-200/70 pt-3 first:border-0 first:pt-0">
+                        <p className="text-sm font-semibold text-gray-800">{species.name} <span className="font-normal italic text-gray-600">({species.scientificName})</span></p>
+                        <p className="mt-0.5 text-sm leading-relaxed text-gray-600">{species.detail}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+            <p className="px-6 pb-5 text-xs leading-relaxed text-gray-500">Propagule appearance can vary. Use local species identification and site guidance from MENRO when selecting seedlings for planting.</p>
+            <div className="flex justify-end border-t border-gray-100 px-6 py-4"><button type="button" onClick={() => setIsOpen(false)} className="rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700">Done</button></div>
+          </section>
+        </div>
+      )}
+    </>
+  )
+}
+
 function TipsGuides() {
   const [species, setSpecies] = useState<MangroveSpecies[]>([])
   const [search, setSearch] = useState('')
@@ -57,6 +146,7 @@ function TipsGuides() {
   const [selectedGuide, setSelectedGuide] = useState<{ category: string; title: string; body: string } | null>(null)
   useEffect(() => { fetchSpecies().then(setSpecies).catch(() => {}) }, [])
   const entries = [
+    PROPAGULE_TYPE_GUIDE,
     { category: 'Monitoring and Care', title: 'Count survival', body: 'Mark a small plot or row. Count living seedlings and dead seedlings separately. Record the date and use the same plot each visit. Survival rate = living seedlings ÷ seedlings planted × 100.' },
     { category: 'Monitoring and Care', title: 'Measure height', body: 'Measure from the soil line to the highest living tip. Use centimeters, measure the same trees each visit, and record the date.' },
     { category: 'Monitoring and Care', title: 'Check pests, barnacles, and site condition', body: 'Look at leaves, stems, and roots for damage, barnacles, pests, or disease. Note wave damage, erosion, trash, and plastic. Photograph the same angle.' },
@@ -118,7 +208,7 @@ function TipsGuides() {
 
     {filtered.length > 0 && <section className="space-y-3">
       {(category === 'All' || category === 'Species') && <div className="flex items-center gap-2"><span className="rounded-lg bg-blue-50 p-2 text-blue-700"><ClipboardCheck className="h-4 w-4" /></span><div><h2 className="font-bold text-gray-900">Field tips & how-tos</h2><p className="text-xs text-gray-500">Short, practical steps for your next visit.</p></div></div>}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{filtered.map((e, i) => <article key={`${e.title}-${i}`} style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }} className="group flex h-full flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg animate-slide-up">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{filtered.map((e, i) => e.title === PROPAGULE_TYPE_GUIDE.title ? <PropaguleTypeGuideCard key={e.title} /> : <article key={`${e.title}-${i}`} style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }} className="group flex h-full flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg animate-slide-up">
         <div className="flex items-center justify-between gap-3"><span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-800"><Tag className="h-3 w-3" />{e.category}</span><span className="rounded-lg bg-gray-50 p-2 text-gray-400 transition-colors group-hover:bg-emerald-50 group-hover:text-emerald-700"><BookOpen className="h-4 w-4" /></span></div>
         <h3 className="mt-4 text-base font-bold text-gray-900 transition-colors group-hover:text-emerald-800">{e.title}</h3><p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{e.body}</p>
         <button type="button" onClick={() => setSelectedGuide(e)} className="mt-4 flex w-full items-center justify-between border-t border-gray-100 pt-3 text-left text-xs font-semibold text-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600" aria-label={`Open field reference: ${e.title}`}><span>Read field reference</span><ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></button>
@@ -165,6 +255,14 @@ function ArticlesContent() {
     <SidebarLayout title="Articles & Tips" subtitle="Mangrove knowledge and conservation guides">
       <div className="page-container space-y-6">
 
+        <section aria-labelledby="shared-propagule-guide-heading" className="space-y-3">
+          <div>
+            <h2 id="shared-propagule-guide-heading" className="text-lg font-bold text-gray-900">Field handbook</h2>
+            <p className="text-sm text-gray-500">Practical mangrove identification reference for MENRO and field teams.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2"><PropaguleTypeGuideCard /></div>
+        </section>
+
         {/* Header row */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex gap-2 flex-wrap">
@@ -193,7 +291,7 @@ function ArticlesContent() {
             </div>
             {isStaff && (
               <Link href="/articles/manage" className="btn-primary text-sm gap-1.5">
-                <Plus className="w-4 h-4" /> New Article
+                <Plus className="w-4 h-4" /> Manage Articles
               </Link>
             )}
           </div>
