@@ -19,8 +19,7 @@ import {
   Wind,
 } from 'lucide-react'
 
-const WEATHER_LATITUDE = 12.983294
-const WEATHER_LONGITUDE = 121.4666648
+// Gloria, Oriental Mindoro coordinates (used by the server-side proxy route)
 
 interface CurrentWeather {
   time: string
@@ -165,59 +164,22 @@ export default function WeatherForecastCard() {
     else setLoading(true)
     setError('')
 
-    const params = new URLSearchParams({
-      latitude: String(WEATHER_LATITUDE),
-      longitude: String(WEATHER_LONGITUDE),
-      current: [
-        'temperature_2m',
-        'relative_humidity_2m',
-        'apparent_temperature',
-        'is_day',
-        'precipitation',
-        'weather_code',
-        'wind_speed_10m',
-        'wind_direction_10m',
-      ].join(','),
-      hourly: [
-        'temperature_2m',
-        'precipitation_probability',
-        'precipitation',
-        'weather_code',
-      ].join(','),
-      daily: [
-        'weather_code',
-        'temperature_2m_max',
-        'temperature_2m_min',
-        'precipitation_probability_max',
-      ].join(','),
-      forecast_days: '5',
-      timezone: 'Asia/Manila',
-    })
-
-    let lastError: unknown
-    let success = false
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        if (attempt > 0) {
-          await new Promise(r => setTimeout(r, 1000 * attempt))
-        }
-        const response = await fetch(
-          `https://api.open-meteo.com/v1/forecast?${params}`,
-          { cache: 'no-store', signal: AbortSignal.timeout(10_000) },
-        )
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = await response.json() as OpenMeteoResponse
-        setForecast(normalizeForecast(data))
-        success = true
-        break
-      } catch (err) {
-        lastError = err
+    try {
+      // Use the server-side proxy route (/api/weather) instead of calling
+      // Open-Meteo directly from the browser — the direct fetch was timing out
+      // in production because the client network couldn't reach api.open-meteo.com.
+      const response = await fetch('/api/weather', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${response.status}`)
       }
-    }
-
-    if (!success) {
-      const msg = lastError instanceof Error ? lastError.message : String(lastError)
+      const data = await response.json() as OpenMeteoResponse
+      setForecast(normalizeForecast(data))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       setError(`Weather unavailable (${msg}). Click Refresh to try again.`)
     }
 

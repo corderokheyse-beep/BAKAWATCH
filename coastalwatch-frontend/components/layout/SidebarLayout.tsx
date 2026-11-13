@@ -9,9 +9,7 @@ import { getNavLinks, roleLabel } from '@/lib/nav-links'
 import NotificationBell from '@/components/layout/NotificationBell'
 import AnnouncementBanner from '@/components/ui/AnnouncementBanner'
 import BakawatchLogo from '@/components/ui/BakawatchLogo'
-import {
-  LogOut, Menu, TreePine, Shield, ChevronRight,
-} from 'lucide-react'
+import { LogOut, Menu, Shield, ChevronRight } from 'lucide-react'
 
 interface SidebarLayoutProps {
   children: React.ReactNode
@@ -19,51 +17,43 @@ interface SidebarLayoutProps {
   subtitle?: string
 }
 
-// Extracted so useSearchParams is inside a Suspense boundary (required by Next.js 16)
-function NavLinks({ navLinks, onClose }: { navLinks: ReturnType<typeof getNavLinks>; onClose: () => void }) {
-  const pathname = usePathname()
+// ── Active-link resolver (shared by sidebar and bottom nav) ──────────────────
+function useActiveHref(navLinks: ReturnType<typeof getNavLinks>): string | null {
+  const pathname  = usePathname()
   const searchParams = useSearchParams()
 
-  // A link "matches" the current URL if its base path is the current path or an
-  // ancestor of it, and any query params it declares (e.g. ?tab=users) match.
   const matches = (href: string): boolean => {
     const [base, query] = href.split('?')
     if (pathname !== base && !pathname.startsWith(base + '/')) return false
     if (query) {
-      const linkParams = new URLSearchParams(query)
-      for (const [key, value] of linkParams.entries()) {
-        if (searchParams.get(key) !== value) return false
-      }
+      const lp = new URLSearchParams(query)
+      for (const [k, v] of lp.entries()) if (searchParams.get(k) !== v) return false
     } else if (searchParams.has('tab')) {
-      // A plain link (no query) must not win when a tab-specific link exists.
       return false
     }
     return true
   }
 
-  // Resolve a SINGLE active link to avoid double-highlighting when one route is
-  // a prefix of another (e.g. /plantation vs /plantation/new, /admin vs
-  // /admin/reports). The winner is the most specific match:
-  //   1. an exact base-path match always wins (e.g. on /plantation/new, the
-  //      "Plant" link whose base IS /plantation/new beats the "My Plantations"
-  //      link whose base is only /plantation),
-  //   2. otherwise the longest matching base path wins,
-  //   3. ties break in favour of the link that declares query params.
-  const activeHref = (() => {
-    let winner: string | null = null
-    let winnerScore = -1
-    for (const { href } of navLinks) {
-      if (!matches(href)) continue
-      const [base, query] = href.split('?')
-      const exact = pathname === base
-      const score = (exact ? 100000 : 0) + base.length * 2 + (query ? 1 : 0)
-      if (score > winnerScore) {
-        winnerScore = score
-        winner = href
-      }
-    }
-    return winner
-  })()
+  let winner: string | null = null
+  let winnerScore = -1
+  for (const { href } of navLinks) {
+    if (!matches(href)) continue
+    const [base, query] = href.split('?')
+    const score = (pathname === base ? 100000 : 0) + base.length * 2 + (query ? 1 : 0)
+    if (score > winnerScore) { winnerScore = score; winner = href }
+  }
+  return winner
+}
+
+// ── Desktop / mobile-overlay sidebar nav links ───────────────────────────────
+function NavLinks({
+  navLinks,
+  onClose,
+}: {
+  navLinks: ReturnType<typeof getNavLinks>
+  onClose: () => void
+}) {
+  const activeHref = useActiveHref(navLinks)
 
   return (
     <nav className="space-y-0.5">
@@ -78,7 +68,7 @@ function NavLinks({ navLinks, onClose }: { navLinks: ReturnType<typeof getNavLin
               'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150',
               active
                 ? 'bg-white text-[#1a4731] font-semibold shadow-sm'
-                : 'text-white/80 hover:text-white hover:bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/10',
             )}
           >
             <Icon className="w-4 h-4 shrink-0" />
@@ -91,18 +81,65 @@ function NavLinks({ navLinks, onClose }: { navLinks: ReturnType<typeof getNavLin
   )
 }
 
-export default function SidebarLayout({ children, title, subtitle }: SidebarLayoutProps) {
-  const { user, logout } = useAuth()
-  const router = useRouter()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const navLinks = getNavLinks(user?.role)
+// ── Mobile fixed bottom navigation bar ───────────────────────────────────────
+function MobileBottomNav({ navLinks }: { navLinks: ReturnType<typeof getNavLinks> }) {
+  const activeHref = useActiveHref(navLinks)
+  // Show at most 5 items so each tab is comfortably tappable
+  const visible = navLinks.slice(0, 5)
 
-  async function handleLogout() {
-    await logout()
-    router.push('/')
-  }
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#1a4731] border-t border-white/10 flex items-stretch"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="Mobile navigation"
+    >
+      {visible.map(({ href, label, icon: Icon }) => {
+        const active = href === activeHref
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 px-1 relative transition-all duration-150',
+              active ? 'text-white' : 'text-white/50 hover:text-white/80',
+            )}
+          >
+            {/* Top indicator pill when active */}
+            {active && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />
+            )}
+            <div className={cn(
+              'w-9 h-7 flex items-center justify-center rounded-xl transition-all duration-150',
+              active ? 'bg-white/20' : '',
+            )}>
+              <Icon className={cn('w-5 h-5', active ? 'text-white' : 'text-white/50')} />
+            </div>
+            <span className={cn(
+              'text-[10px] font-medium truncate max-w-[56px] text-center leading-none',
+              active ? 'text-white font-semibold' : 'text-white/50',
+            )}>
+              {label}
+            </span>
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
 
-  const SidebarContent = () => (
+// ── Sidebar content (shared between desktop & mobile overlay) ─────────────────
+function SidebarContent({
+  navLinks,
+  user,
+  onClose,
+  onLogout,
+}: {
+  navLinks: ReturnType<typeof getNavLinks>
+  user: ReturnType<typeof useAuth>['user']
+  onClose: () => void
+  onLogout: () => void
+}) {
+  return (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-5 py-5 border-b border-white/10">
@@ -115,15 +152,15 @@ export default function SidebarLayout({ children, title, subtitle }: SidebarLayo
         </div>
       </div>
 
-      {/* Nav */}
+      {/* Nav links */}
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest px-2 mb-3">Navigation</p>
         <Suspense fallback={<div className="h-8" />}>
-          <NavLinks navLinks={navLinks} onClose={() => setMobileOpen(false)} />
+          <NavLinks navLinks={navLinks} onClose={onClose} />
         </Suspense>
       </div>
 
-      {/* User info */}
+      {/* User / sign-out */}
       <div className="px-3 py-4 border-t border-white/10">
         {user ? (
           <>
@@ -137,7 +174,7 @@ export default function SidebarLayout({ children, title, subtitle }: SidebarLayo
               </div>
             </div>
             <button
-              onClick={handleLogout}
+              onClick={onLogout}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-white/70 hover:text-white hover:bg-white/10 transition-all duration-150"
             >
               <LogOut className="w-4 h-4" />
@@ -156,45 +193,83 @@ export default function SidebarLayout({ children, title, subtitle }: SidebarLayo
       </div>
     </div>
   )
+}
+
+// ── Main layout ───────────────────────────────────────────────────────────────
+export default function SidebarLayout({ children, title, subtitle }: SidebarLayoutProps) {
+  const { user, logout } = useAuth()
+  const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const navLinks = getNavLinks(user?.role)
+
+  async function handleLogout() {
+    await logout()
+    router.push('/')
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f5f7f5]">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-52 shrink-0 bg-[#1a4731] overflow-hidden" aria-label="Main navigation">
-        <SidebarContent />
+
+      {/* ── Desktop sidebar ── */}
+      <aside
+        className="hidden md:flex flex-col w-52 shrink-0 bg-[#1a4731] overflow-hidden"
+        aria-label="Main navigation"
+      >
+        <SidebarContent
+          navLinks={navLinks}
+          user={user}
+          onClose={() => {}}
+          onLogout={handleLogout}
+        />
       </aside>
 
-      {/* Mobile sidebar overlay */}
+      {/* ── Mobile full-screen overlay sidebar (hamburger) ── */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu" id="mobile-nav">
+        <div
+          className="fixed inset-0 z-50 flex md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation menu"
+          id="mobile-nav"
+        >
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <aside className="relative flex flex-col w-64 bg-[#1a4731] h-full shadow-2xl animate-slide-up" aria-label="Mobile navigation">
+          <aside
+            className="relative flex flex-col w-64 bg-[#1a4731] h-full shadow-2xl"
+            aria-label="Mobile navigation"
+          >
             <div className="flex items-center justify-between px-4 pt-4 pb-2">
               <div className="flex items-center gap-2">
                 <BakawatchLogo size={28} />
                 <span className="text-white font-black text-sm tracking-wide">BAKAWATCH</span>
               </div>
-              <button onClick={() => setMobileOpen(false)}
-                className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                aria-label="Close navigation menu">
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close navigation menu"
+              >
                 ✕
               </button>
             </div>
-            <SidebarContent />
+            <SidebarContent
+              navLinks={navLinks}
+              user={user}
+              onClose={() => setMobileOpen(false)}
+              onLogout={handleLogout}
+            />
           </aside>
         </div>
       )}
 
-      {/* Main content */}
+      {/* ── Main content area ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
         {/* Top bar */}
         <header className="bg-white border-b border-gray-100 shadow-[0_1px_0_rgba(0,0,0,0.06)] px-6 h-14 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            {/* Mobile hamburger */}
             <button
               className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               onClick={() => setMobileOpen(true)}
@@ -206,9 +281,7 @@ export default function SidebarLayout({ children, title, subtitle }: SidebarLayo
             </button>
             {title && (
               <div>
-                <h1 className="text-sm font-bold text-gray-900 leading-tight">
-                  {title}
-                </h1>
+                <h1 className="text-sm font-bold text-gray-900 leading-tight">{title}</h1>
                 {subtitle && <p className="text-xs text-gray-400 leading-tight">{subtitle}</p>}
               </div>
             )}
@@ -225,19 +298,28 @@ export default function SidebarLayout({ children, title, subtitle }: SidebarLayo
                 </div>
               </>
             ) : (
-              <Link href="/login" className="text-xs font-semibold text-primary-600 hover:text-primary-700 px-3 py-1.5 rounded-lg border border-primary-200 hover:bg-primary-50 transition-colors">
+              <Link
+                href="/login"
+                className="text-xs font-semibold text-primary-600 hover:text-primary-700 px-3 py-1.5 rounded-lg border border-primary-200 hover:bg-primary-50 transition-colors"
+              >
                 Sign in
               </Link>
             )}
           </div>
         </header>
 
-        {/* Page content */}
-        <main id="main-content" className="flex-1 overflow-y-auto" tabIndex={-1}>
+        {/* Page content — pb-16 on mobile so content clears the bottom nav bar */}
+        <main id="main-content" className="flex-1 overflow-y-auto pb-16 md:pb-0" tabIndex={-1}>
           <AnnouncementBanner />
           {children}
         </main>
       </div>
+
+      {/* ── Mobile fixed bottom navigation bar ── */}
+      <Suspense fallback={null}>
+        <MobileBottomNav navLinks={navLinks} />
+      </Suspense>
+
     </div>
   )
 }
