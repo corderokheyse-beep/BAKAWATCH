@@ -165,50 +165,64 @@ export default function WeatherForecastCard() {
     else setLoading(true)
     setError('')
 
-    try {
-      const url = new URL('https://api.open-meteo.com/v1/forecast')
-      url.search = new URLSearchParams({
-        latitude: String(WEATHER_LATITUDE),
-        longitude: String(WEATHER_LONGITUDE),
-        current: [
-          'temperature_2m',
-          'relative_humidity_2m',
-          'apparent_temperature',
-          'is_day',
-          'precipitation',
-          'weather_code',
-          'wind_speed_10m',
-          'wind_direction_10m',
-        ].join(','),
-        hourly: [
-          'temperature_2m',
-          'precipitation_probability',
-          'precipitation',
-          'weather_code',
-        ].join(','),
-        daily: [
-          'weather_code',
-          'temperature_2m_max',
-          'temperature_2m_min',
-          'precipitation_probability_max',
-        ].join(','),
-        forecast_days: '5',
-        timezone: 'Asia/Manila',
-      }).toString()
+    const params = new URLSearchParams({
+      latitude: String(WEATHER_LATITUDE),
+      longitude: String(WEATHER_LONGITUDE),
+      current: [
+        'temperature_2m',
+        'relative_humidity_2m',
+        'apparent_temperature',
+        'is_day',
+        'precipitation',
+        'weather_code',
+        'wind_speed_10m',
+        'wind_direction_10m',
+      ].join(','),
+      hourly: [
+        'temperature_2m',
+        'precipitation_probability',
+        'precipitation',
+        'weather_code',
+      ].join(','),
+      daily: [
+        'weather_code',
+        'temperature_2m_max',
+        'temperature_2m_min',
+        'precipitation_probability_max',
+      ].join(','),
+      forecast_days: '5',
+      timezone: 'Asia/Manila',
+    })
 
-      const response = await fetch(url, { cache: 'no-store' })
-      if (!response.ok) {
-        throw new Error(`Open-Meteo returned HTTP ${response.status}.`)
+    let lastError: unknown
+    let success = false
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise(r => setTimeout(r, 1000 * attempt))
+        }
+        const response = await fetch(
+          `https://api.open-meteo.com/v1/forecast?${params}`,
+          { cache: 'no-store', signal: AbortSignal.timeout(10_000) },
+        )
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.json() as OpenMeteoResponse
+        setForecast(normalizeForecast(data))
+        success = true
+        break
+      } catch (err) {
+        lastError = err
       }
-
-      const data = await response.json() as OpenMeteoResponse
-      setForecast(normalizeForecast(data))
-    } catch {
-      setError('Weather forecast is temporarily unavailable.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
     }
+
+    if (!success) {
+      const msg = lastError instanceof Error ? lastError.message : String(lastError)
+      setError(`Weather unavailable (${msg}). Click Refresh to try again.`)
+    }
+
+    setLoading(false)
+    setRefreshing(false)
   }, [])
 
   useEffect(() => {
