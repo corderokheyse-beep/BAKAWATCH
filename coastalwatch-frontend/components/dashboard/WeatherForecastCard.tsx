@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Cloud,
   CloudDrizzle,
@@ -17,9 +17,223 @@ import {
   Sun,
   Thermometer,
   Wind,
+  Waves,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 
 // Gloria, Oriental Mindoro coordinates (used by the server-side proxy route)
+
+// ── Tide types & helpers ───────────────────────────────────────────────────
+interface TideEvent { time: string; height: number; type: 'high' | 'low' }
+interface TideState {
+  currentHeight: number
+  trend: 'rising' | 'falling' | 'steady'
+  nextHigh: TideEvent | null
+  nextLow:  TideEvent | null
+  todayEvents: TideEvent[]
+  fetchedAt: Date
+}
+
+function fmtTideTime(isoHour: string): string {
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date(isoHour + ':00+08:00'))
+}
+
+function tideCountdown(from: Date, isoHour: string): string {
+  const to = new Date(isoHour + ':00+08:00')
+  const diffMs = to.getTime() - from.getTime()
+  if (diffMs <= 0) return 'now'
+  const totalMin = Math.round(diffMs / 60_000)
+  const hrs = Math.floor(totalMin / 60)
+  const mins = totalMin % 60
+  if (hrs === 0) return `${mins} min`
+  if (mins === 0) return `${hrs} hr`
+  return `${hrs} hr ${mins} min`
+}
+
+function detectTideExtremes(times: string[], heights: number[]): TideEvent[] {
+  const events: TideEvent[] = []
+  for (let i = 1; i < heights.length - 1; i++) {
+    const prev = heights[i - 1], cur = heights[i], next = heights[i + 1]
+    if (cur > prev && cur > next) events.push({ time: times[i], height: cur, type: 'high' })
+    else if (cur < prev && cur < next) events.push({ time: times[i], height: cur, type: 'low' })
+  }
+  return events
+}
+
+function parseTideResponse(raw: { hourly: { time: string[]; sea_level_height: number[] } }): TideState {
+  const { time, sea_level_height } = raw.hourly
+  const now = new Date()
+  const nowHour = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit',
+  }).format(now).replace(' ', 'T').slice(0, 13)
+
+  let currentIndex = 0
+  for (let i = 0; i < time.length; i++) {
+    if (time[i].startsWith(nowHour)) { currentIndex = i; break }
+  }
+
+  const currentHeight = sea_level_height[currentIndex] ?? 0
+  const prevHeight    = sea_level_height[Math.max(0, currentIndex - 1)] ?? currentHeight
+  const trend: TideState['trend'] =
+    currentHeight > prevHeight + 0.02 ? 'rising'
+    : currentHeight < prevHeight - 0.02 ? 'falling' : 'steady'
+
+  const allEvents = detectTideExtremes(time, sea_level_height)
+  const todayStr  = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now)
+
+  const todayEvents   = allEvents.filter(e => e.time.startsWith(todayStr))
+  const nowMs         = now.getTime()
+  const futureEvents  = allEvents.filter(e => new Date(e.time + ':00+08:00').getTime() > nowMs)
+  const nextHigh      = futureEvents.find(e => e.type === 'high') ?? null
+  const nextLow       = futureEvents.find(e => e.type === 'low')  ?? null
+
+  return { currentHeight, trend, nextHigh, nextLow, todayEvents, fetchedAt: now }
+}
+
+// ── TideSection: embedded tide card shown inside WeatherForecastCard ──────────
+function TideSection() {
+  const [tide, setTide]           = useState<TideState | null>(null)
+  const [tideError, setTideError] = useState('')
+  const [tideLoading, setTideLoading] = useState(true)
+  const [tideRefreshing, setTideRefreshing] = useState(false)
+  const nowRef = useRef(new Date())
+
+  const loadTides = useCallback(async (manual = false) => {
+    if (manual) setTideRefreshing(true)
+    else setTideLoading(true)
+    setTideError('')
+    nowRef.current = new Date()
+    try {
+      const res = await fetch('/api/tides', { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      setTide(parseTideResponse(await res.json()))
+    } catch (err) {
+      setTideError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setTideLoading(false)
+      setTideRefreshing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadTides()
+    const t = setInterval(() => void loadTides(true), 30 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [loadTides])
+
+  return (
+    <div className="mt-4 pt-4 border-t border-sky-100">
+      {/* Tide header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+            <Waves className="h-3.5 w-3.5" />
+          </div>
+          <span className="text-sm font-bold text-gray-900">Tide Monitor</span>
+          <span className="text-xs text-gray-400">· Gloria, Oriental Mindoro</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void loadTides(true)}
+          disabled={tideLoading || tideRefreshing}
+          className="inline-flex h-7 items-center gap-1 rounded-lg border border-blue-100 bg-white px-2 text-[11px] font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition"
+        >
+          <RefreshCw className={`h-3 w-3 ${tideRefreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {tideLoading && (
+        <div className="h-16 animate-pulse rounded-xl bg-blue-100/60" />
+      )}
+
+      {!tideLoading && tideError && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <p>Tide data unavailable ({tideError}). Click Refresh.</p>
+        </div>
+      )}
+
+      {!tideLoading && !tideError && tide && (
+        <div className="grid gap-3 sm:grid-cols-2">
+
+          {/* Current + next tides */}
+          <div className="rounded-xl bg-white/80 border border-blue-100 px-3 py-2.5">
+            <div className="flex items-end gap-2 mb-2">
+              <p className="text-2xl font-extrabold text-blue-900 leading-none">
+                {tide.currentHeight.toFixed(2)}
+                <span className="text-sm font-semibold text-blue-400 ml-0.5">m</span>
+              </p>
+              <span className={`inline-flex items-center gap-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full mb-0.5 ${
+                tide.trend === 'rising' ? 'bg-blue-100 text-blue-700'
+                : tide.trend === 'falling' ? 'bg-red-100 text-red-600'
+                : 'bg-gray-100 text-gray-500'
+              }`}>
+                {tide.trend === 'rising'
+                  ? <><ArrowUp className="w-2.5 h-2.5" /> Rising</>
+                  : tide.trend === 'falling'
+                    ? <><ArrowDown className="w-2.5 h-2.5" /> Falling</>
+                    : 'Steady'}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {tide.nextLow && (
+                <p className="text-[11px] text-gray-600">
+                  Next <span className="font-bold text-red-600">low</span> in{' '}
+                  <span className="font-semibold">{tideCountdown(nowRef.current, tide.nextLow.time)}</span>
+                </p>
+              )}
+              {tide.nextHigh && (
+                <p className="text-[11px] text-gray-600">
+                  Next <span className="font-bold text-blue-700">high</span> in{' '}
+                  <span className="font-semibold">{tideCountdown(nowRef.current, tide.nextHigh.time)}</span>
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Today's tide schedule */}
+          <div className="rounded-xl bg-white/80 border border-blue-100 px-3 py-2.5">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Today's Tides</p>
+            {tide.todayEvents.length === 0
+              ? <p className="text-xs text-gray-400 italic">No events detected.</p>
+              : (
+                <div className="space-y-1">
+                  {tide.todayEvents.slice(0, 4).map((ev, i) => (
+                    <div key={i} className="flex items-center justify-between gap-1">
+                      <span className={`flex items-center gap-1 text-[11px] font-semibold ${
+                        ev.type === 'high' ? 'text-blue-700' : 'text-red-600'
+                      }`}>
+                        {ev.type === 'high'
+                          ? <ArrowUp className="w-3 h-3" />
+                          : <ArrowDown className="w-3 h-3" />}
+                        {ev.type === 'high' ? 'High' : 'Low'}
+                      </span>
+                      <span className="text-[11px] text-gray-500 tabular-nums">{fmtTideTime(ev.time)}</span>
+                      <span className="text-[11px] font-bold text-gray-800 tabular-nums">{ev.height.toFixed(2)} m</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+        </div>
+      )}
+
+      <p className="mt-2 text-[10px] text-gray-400">
+        Tide data by Open-Meteo Marine API. Estimates only — not for navigation.
+      </p>
+    </div>
+  )
+}
 
 interface CurrentWeather {
   time: string
@@ -336,6 +550,9 @@ export default function WeatherForecastCard() {
           </div>
         </>
       )}
+
+      {/* ── Tide Monitor ── always shown below weather, same card ── */}
+      <TideSection />
     </section>
   )
 }
