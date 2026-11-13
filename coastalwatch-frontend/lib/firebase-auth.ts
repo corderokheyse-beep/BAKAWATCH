@@ -5,6 +5,9 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
+  signInWithPopup,
+  GoogleAuthProvider,
+  browserPopupRedirectResolver,
   type UserCredential,
 } from 'firebase/auth'
 import { getFirebaseAuth, hasInitializedFirebaseAuth } from './firebase'
@@ -24,6 +27,29 @@ export async function firebaseRegister(email: string, password: string): Promise
 /** Send a Firebase password-reset email. Firebase owns the whole reset flow. */
 export async function firebaseSendReset(email: string): Promise<void> {
   await sendPasswordResetEmail(getFirebaseAuth(), email.trim())
+}
+
+/**
+ * Sign in with Google via a popup and return a fresh ID token.
+ * Uses browserPopupRedirectResolver explicitly so inMemoryPersistence
+ * auth instances (which have no resolver attached by default) can open the
+ * Google popup without throwing auth/argument-error.
+ */
+export async function firebaseGoogleSignIn(): Promise<{ idToken: string; email: string; name: string }> {
+  const provider = new GoogleAuthProvider()
+  provider.addScope('email')
+  provider.addScope('profile')
+  const cred: UserCredential = await signInWithPopup(
+    getFirebaseAuth(),
+    provider,
+    browserPopupRedirectResolver,
+  )
+  const idToken = await cred.user.getIdToken()
+  return {
+    idToken,
+    email: cred.user.email ?? '',
+    name: cred.user.displayName ?? '',
+  }
 }
 
 /** Sign out of Firebase (best-effort; local session is cleared separately). */

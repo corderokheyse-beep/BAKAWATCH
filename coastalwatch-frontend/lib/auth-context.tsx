@@ -5,13 +5,14 @@ import axios from 'axios'
 import Cookies from 'js-cookie'
 import api from './api'
 import type { User } from './types'
-import { firebaseSignIn, firebaseRegister, firebaseSignOut } from './firebase-auth'
+import { firebaseSignIn, firebaseRegister, firebaseSignOut, firebaseGoogleSignIn } from './firebase-auth'
 
 interface AuthContextType {
   user: User | null
   token: string | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithGoogle: () => Promise<void>
   register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -120,6 +121,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('cw_user', JSON.stringify(data.user)) } catch {}
   }
 
+  // Sign in or register with Google. The backend /auth/firebase endpoint handles
+  // both cases: it creates a new account (role = volunteer) if the email is new,
+  // or returns the existing session if it already has an account.
+  const loginWithGoogle = async () => {
+    const { idToken, email, name } = await firebaseGoogleSignIn()
+    const { data } = await api.post('/auth/firebase', {
+      id_token:     idToken,
+      name,         // used only when creating a new account
+      organization: undefined,
+      phone:        undefined,
+    })
+    Cookies.set('token', data.token, { expires: 7, sameSite: 'lax' })
+    setToken(data.token)
+    setUser(data.user)
+    try { localStorage.setItem('cw_user', JSON.stringify(data.user)) } catch {}
+  }
+
   // Register the account in Firebase, then provision/link it in the app.
   const register = async (formData: RegisterData) => {
     let idToken: string
@@ -202,7 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, token, loading, login, register, logout, refreshUser,
+      user, token, loading, login, loginWithGoogle, register, logout, refreshUser,
       isAdmin:       user?.role === 'admin',
       isStaff:       user?.role === 'admin' || user?.role === 'staff',
       isMenro:       user?.role === 'menro',
