@@ -12,7 +12,7 @@ class RestorationSite extends Model
 
     protected $fillable = [
         'created_by', 'assigned_to', 'name', 'description', 'area_hectares',
-        'planted_hectares', 'barangay', 'status', 'established_year',
+        'planted_hectares', 'barangay', 'status', 'site_type', 'established_year',
         'latitude', 'longitude', 'boundary_geojson', 'boundary_type',
     ];
 

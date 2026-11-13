@@ -40,6 +40,27 @@ const SITE_STATUS_CONFIG: Record<string, {
   inactive:    { color: '#4b5563', fill: '#9ca3af', label: 'Inactive',    icon: '⛔', bg: '#f9fafb', text: '#4b5563' },
 }
 
+// Site-type colours — planting sites use green tones, mangrove areas use teal/cyan
+const SITE_TYPE_CONFIG: Record<string, {
+  ringColor: string   // border ring around the pin
+  badge: string       // short text badge shown below the pin label
+  badgeBg: string
+  badgeText: string
+}> = {
+  planting_site: {
+    ringColor: '#16a34a',
+    badge:     '🌱 Planting Site',
+    badgeBg:   '#dcfce7',
+    badgeText: '#15803d',
+  },
+  mangrove_area: {
+    ringColor: '#0e7490',
+    badge:     '🌳 Mangrove Area',
+    badgeBg:   '#cffafe',
+    badgeText: '#0e7490',
+  },
+}
+
 // Zonation colour palette (seaward → landward) for the Mangrove Zones overlay,
 // matching the simplified 7-zone vocabulary used by the Inventory form.
 export const ZONE_COLORS: Record<string, { color: string; fill: string }> = {
@@ -100,16 +121,21 @@ export function reportSeverityColor(report: Report): string {
 }
 
 // ── Pin builders ──────────────────────────────────────────────────────────────
-function buildSitePin(cfg: typeof SITE_STATUS_CONFIG[string], label: string, isSelected: boolean): string {
+function buildSitePin(cfg: typeof SITE_STATUS_CONFIG[string], label: string, isSelected: boolean, siteType?: string): string {
   const size = isSelected ? 48 : 40
   const pulse = isSelected
     ? `<circle cx="${(size+10)/2}" cy="${(size+10)/2}" r="${size/2+6}" fill="${cfg.fill}" opacity="0.18"/>`
+    : ''
+  const typeCfg = SITE_TYPE_CONFIG[siteType ?? 'planting_site'] ?? SITE_TYPE_CONFIG.planting_site
+  const ringExtra = siteType === 'mangrove_area'
+    ? `<circle cx="${(size+10)/2}" cy="${(size+10)/2-2}" r="${size/2+4}" fill="none" stroke="${typeCfg.ringColor}" stroke-width="2.5" stroke-dasharray="4 3"/>`
     : ''
   return `
     <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;
       filter:drop-shadow(0 4px 10px rgba(0,0,0,0.28))">
       <svg width="${size+10}" height="${size+10}" viewBox="0 0 ${size+10} ${size+10}" xmlns="http://www.w3.org/2000/svg">
         ${pulse}
+        ${ringExtra}
         <circle cx="${(size+10)/2}" cy="${(size+10)/2-2}" r="${size/2}"
           fill="${cfg.fill}" stroke="white" stroke-width="3"/>
         <text x="${(size+10)/2}" y="${(size+10)/2+7}"
@@ -118,11 +144,17 @@ function buildSitePin(cfg: typeof SITE_STATUS_CONFIG[string], label: string, isS
           points="${(size+10)/2-5},${(size+10)/2+size/2-2} ${(size+10)/2+5},${(size+10)/2+size/2-2} ${(size+10)/2},${(size+10)/2+size/2+8}"
           fill="${cfg.fill}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
       </svg>
-      <div style="background:white;color:${cfg.text};font-size:10px;font-weight:700;
-        font-family:Inter,system-ui,sans-serif;padding:2px 8px;border-radius:20px;
-        border:1.5px solid ${cfg.color};white-space:nowrap;margin-top:-2px;
-        box-shadow:0 2px 6px rgba(0,0,0,0.15);max-width:130px;overflow:hidden;
-        text-overflow:ellipsis;">${label}</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:-2px;">
+        <div style="background:white;color:${cfg.text};font-size:10px;font-weight:700;
+          font-family:Inter,system-ui,sans-serif;padding:2px 8px;border-radius:20px;
+          border:1.5px solid ${cfg.color};white-space:nowrap;
+          box-shadow:0 2px 6px rgba(0,0,0,0.15);max-width:130px;overflow:hidden;
+          text-overflow:ellipsis;">${label}</div>
+        <div style="background:${typeCfg.badgeBg};color:${typeCfg.badgeText};font-size:9px;font-weight:700;
+          font-family:Inter,system-ui,sans-serif;padding:1px 6px;border-radius:20px;
+          border:1px solid ${typeCfg.ringColor};white-space:nowrap;
+          box-shadow:0 1px 4px rgba(0,0,0,0.10);">${typeCfg.badge}</div>
+      </div>
     </div>`
 }
 
@@ -398,7 +430,7 @@ export default function CoastalMapView({
           const label   = site.barangay ?? site.name.split(' ').slice(0, 2).join(' ')
           const pinIcon = L.divIcon({
             className:  '',
-            html:       buildSitePin(cfg, label, isSelected),
+            html:       buildSitePin(cfg, label, isSelected, site.site_type),
             iconSize:   [isSelected ? 58 : 50, isSelected ? 78 : 68],
             iconAnchor: [isSelected ? 29 : 25, isSelected ? 74 : 64],
           })

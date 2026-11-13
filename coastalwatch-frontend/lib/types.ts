@@ -176,6 +176,7 @@ export interface DashboardStats {
 // ─── Mangrove Monitoring System Types ────────────────────────────────────────
 
 export type SiteStatus = 'active' | 'inactive' | 'in_progress'
+export type SiteType   = 'planting_site' | 'mangrove_area'
 
 export interface SiteSpecies {
   species_name: string
@@ -218,6 +219,7 @@ export interface RestorationSite {
   planted_hectares?: number | null
   barangay?: string
   status: SiteStatus
+  site_type?: SiteType     // 'planting_site' | 'mangrove_area'
   established_year?: number
   latitude?: number
   longitude?: number

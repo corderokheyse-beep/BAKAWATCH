@@ -24,6 +24,11 @@ const STATUS_CONFIG: Record<string, { label: string; Icon: LucideIcon; color: st
   inactive:    { label: 'Inactive',    Icon: Ban,    color: '#4b5563', bg: '#f9fafb', text: '#4b5563' },
 }
 
+const SITE_TYPE_CONFIG = {
+  planting_site: { label: '🌱 Planting Site', bg: '#dcfce7', text: '#15803d', border: '#86efac' },
+  mangrove_area: { label: '🌳 Mangrove Area',  bg: '#cffafe', text: '#0e7490', border: '#67e8f9' },
+}
+
 export default function SitesPage() {
   const { user } = useAuth()
   const [sites, setSites]               = useState<RestorationSite[]>([])
@@ -31,6 +36,7 @@ export default function SitesPage() {
   const [search, setSearch]             = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [barangayFilter, setBarangayFilter] = useState('')
+  const [typeFilter, setTypeFilter]     = useState('')
 
   // MENRO / staff / admin can edit site details (matches the backend
   // role:menro,admin,staff gate on PUT /sites/{id}). The editing itself happens
@@ -47,14 +53,15 @@ export default function SitesPage() {
   const barangays = Array.from(new Set(sites.map(s => s.barangay).filter(Boolean))).sort() as string[]
 
   const filtered = sites.filter(s => {
-    if (statusFilter   && s.status   !== statusFilter)   return false
+    if (statusFilter   && s.status    !== statusFilter)   return false
+    if (typeFilter     && (s.site_type ?? 'planting_site') !== typeFilter) return false
     if (barangayFilter && s.barangay !== barangayFilter) return false
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) &&
         !s.barangay?.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
-  const hasFilters = !!(search || statusFilter || barangayFilter)
+  const hasFilters = !!(search || statusFilter || barangayFilter || typeFilter)
 
   const statusCounts = Object.fromEntries(
     Object.keys(STATUS_CONFIG).map(k => [k, sites.filter(s => s.status === k).length])
@@ -82,7 +89,7 @@ export default function SitesPage() {
           )}
         </div>
 
-        {/* Status summary chips */}
+        {/* Status + type summary chips */}
         <div className="flex flex-wrap gap-2 animate-fade-in">
           {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
             <button
@@ -106,9 +113,32 @@ export default function SitesPage() {
               </span>
             </button>
           ))}
+
+          {/* Divider */}
+          <div className="w-px bg-gray-200 self-stretch mx-1" />
+
+          {/* Site type filter chips */}
+          {Object.entries(SITE_TYPE_CONFIG).map(([key, cfg]) => (
+            <button
+              key={key}
+              onClick={() => setTypeFilter(typeFilter === key ? '' : key)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all duration-150',
+                typeFilter === key ? 'shadow-sm scale-[1.02]' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+              )}
+              style={typeFilter === key ? { background: cfg.bg, borderColor: cfg.border, color: cfg.text } : {}}
+            >
+              {cfg.label}
+              <span className={cn(
+                'ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold',
+                typeFilter === key ? 'bg-white/60' : 'bg-gray-100 text-gray-500'
+              )}>
+                {sites.filter(s => (s.site_type ?? 'planting_site') === key).length}
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* Search + filters */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-4 flex flex-wrap items-center gap-3 reveal">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
@@ -141,7 +171,7 @@ export default function SitesPage() {
 
           {hasFilters && (
             <button
-              onClick={() => { setSearch(''); setStatusFilter(''); setBarangayFilter('') }}
+              onClick={() => { setSearch(''); setStatusFilter(''); setBarangayFilter(''); setTypeFilter('') }}
               className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 transition-colors"
             >
               <X className="w-3 h-3" /> Clear all
@@ -196,6 +226,18 @@ export default function SitesPage() {
                       {cfg.label}
                     </span>
                   </div>
+                  {/* Site type badge */}
+                  {(() => {
+                    const tCfg = SITE_TYPE_CONFIG[site.site_type ?? 'planting_site'] ?? SITE_TYPE_CONFIG.planting_site
+                    return (
+                      <span
+                        className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border self-start"
+                        style={{ background: tCfg.bg, color: tCfg.text, borderColor: tCfg.border }}
+                      >
+                        {tCfg.label}
+                      </span>
+                    )
+                  })()}
 
                   {/* Metrics */}
                   <div className="grid grid-cols-2 gap-2">
