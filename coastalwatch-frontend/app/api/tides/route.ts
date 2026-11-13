@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server'
 
-// Server-side proxy for Open-Meteo Marine API — sea level heights for
+// Server-side proxy for Open-Meteo Marine API — wave height for
 // Gloria, Oriental Mindoro (lat 12.9833, lon 121.4667).
-// Fetching server-side avoids ERR_TIMED_OUT that occurs when the browser
-// tries to reach marine-api.open-meteo.com directly in production.
+// NOTE: Open-Meteo Marine does NOT provide sea_level_height or harmonic tide
+// predictions. We fetch wave_height + ocean_current_velocity instead, which
+// are the actual available parameters. The tide card uses these to show
+// current sea conditions rather than harmonic high/low tide predictions.
 
 export async function GET() {
   const params = new URLSearchParams({
     latitude:      '12.9833',
     longitude:     '121.4667',
-    hourly:        'sea_level_height',
+    hourly:        'wave_height,ocean_current_velocity,wave_direction',
     forecast_days: '2',
     timezone:      'Asia/Manila',
   })
@@ -17,12 +19,13 @@ export async function GET() {
   try {
     const res = await fetch(
       `https://marine-api.open-meteo.com/v1/marine?${params}`,
-      { next: { revalidate: 1800 } }, // cache 30 minutes server-side
+      { next: { revalidate: 1800 } },
     )
 
     if (!res.ok) {
+      const body = await res.text()
       return NextResponse.json(
-        { error: `Marine API returned HTTP ${res.status}` },
+        { error: `Marine API returned HTTP ${res.status}: ${body}` },
         { status: 502 },
       )
     }
