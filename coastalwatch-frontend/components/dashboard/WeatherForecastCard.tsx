@@ -174,6 +174,10 @@ function makeNowLinePlugin(heights: number[]): Plugin<'line'> {
         const ey = scales.y.getPixelForValue(heights[sliceIdx] ?? ev.height)
         if (!ex || !ey) return
 
+        // Skip dots that fall outside the chart draw area
+        if (ex < chartArea.left || ex > chartArea.right) return
+        if (ey < chartArea.top  || ey > chartArea.bottom) return
+
         const isPeak = ev.type === 'peak'
         ctx.save()
         ctx.beginPath()
@@ -190,7 +194,16 @@ function makeNowLinePlugin(heights: number[]): Plugin<'line'> {
         ctx.fillStyle = isPeak ? '#1d4ed8' : '#dc2626'
         ctx.font      = 'bold 9px Inter, system-ui, sans-serif'
         ctx.textAlign = 'center'
-        ctx.fillText(timeStr, ex, isPeak ? ey - 10 : ey + 16)
+        // Measure text to clamp label within chart area
+        const textW   = ctx.measureText(timeStr).width
+        const clampedX = Math.min(
+          Math.max(ex, chartArea.left  + textW / 2 + 2),
+          chartArea.right - textW / 2 - 2,
+        )
+        const labelY = isPeak
+          ? Math.max(chartArea.top + 10, ey - 10)
+          : Math.min(chartArea.bottom - 4, ey + 16)
+        ctx.fillText(timeStr, clampedX, labelY)
         ctx.restore()
       })
     },
@@ -240,7 +253,7 @@ function WaveChart({ labels, heights, nowIndex, events }: WaveChartProps) {
     scales: {
       x: {
         ticks: {
-          font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: '#9ca3af',
+          font: { size: 8 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, color: '#9ca3af',
         },
         grid:   { display: false },
         border: { display: false },
@@ -268,7 +281,7 @@ function WaveChart({ labels, heights, nowIndex, events }: WaveChartProps) {
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
         24-Hour Wave Height Chart · Gloria, Oriental Mindoro
       </p>
-      <div className="relative h-36">
+      <div className="relative h-36 sm:h-40">
         <Line data={data} options={options} plugins={[plugin]} />
       </div>
       <div className="flex items-center gap-4 mt-1.5 text-[10px] text-gray-400">

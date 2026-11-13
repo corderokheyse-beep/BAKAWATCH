@@ -12,7 +12,6 @@ import StatCard from '@/components/ui/StatCard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Badge from '@/components/ui/Badge'
 import WeatherForecastCard from '@/components/dashboard/WeatherForecastCard'
-import TideCard from '@/components/dashboard/TideCard'
 import MonitoringTimeline from '@/components/reports/MonitoringTimeline'
 import api from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
@@ -172,9 +171,8 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="mb-8 grid gap-4 lg:grid-cols-2">
+        <div className="mb-8">
           <WeatherForecastCard />
-          <TideCard />
         </div>
 
         {/* Stats */}
