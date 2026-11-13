@@ -2,25 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Cloud,
-  CloudDrizzle,
-  CloudFog,
-  CloudLightning,
-  CloudRain,
-  CloudSnow,
-  CloudSun,
-  ChevronDown,
-  ChevronUp,
-  Droplets,
-  Info,
-  RefreshCw,
-  Sun,
-  Thermometer,
-  Wind,
-  Waves,
-  ArrowUp,
-  ArrowDown,
+  Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow,
+  CloudSun, ChevronDown, ChevronUp, Droplets, Info, RefreshCw,
+  Sun, Thermometer, Wind, Waves, ArrowUp, ArrowDown,
 } from 'lucide-react'
+import {
+  Chart as ChartJS,
+  CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
+  type ChartOptions, type Plugin,
+} from 'chart.js'
+import { Line } from 'react-chartjs-2'
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip)
 
 // Gloria, Oriental Mindoro coordinates (used by the server-side proxy route)
 
@@ -35,6 +28,11 @@ interface MarineState {
   nextTrough:  WaveEvent | null
   todayEvents: WaveEvent[]
   fetchedAt:   Date
+  // Chart data — 24-hour window
+  chartLabels:   string[]   // hour labels e.g. "2 AM"
+  chartHeights:  number[]   // wave_height values
+  chartNowIndex: number     // index of current hour for the "now" line
+  allEvents:     WaveEvent[] // all extremes across 48 h for dot annotations
 }
 
 function fmtTideTime(isoHour: string): string {
@@ -106,7 +104,186 @@ function parseTideResponse(raw: {
   const nextPeak     = futureEvents.find(e => e.type === 'peak')   ?? null
   const nextTrough   = futureEvents.find(e => e.type === 'trough') ?? null
 
-  return { currentWaveHeight, currentCurrentVelocity, trend, nextPeak, nextTrough, todayEvents, fetchedAt: now }
+  // Build 24-hour chart window: start 2 hours before now, end 22 hours after
+  const chartStart = Math.max(0, currentIndex - 2)
+  const chartEnd   = Math.min(time.length - 1, chartStart + 23)
+  const slicedTime    = time.slice(chartStart, chartEnd + 1)
+  const slicedHeights = wave_height.slice(chartStart, chartEnd + 1)
+
+  const chartLabels = slicedTime.map(t => {
+    const h = parseInt(t.slice(11, 13), 10)
+    return h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
+  })
+
+  return {
+    currentWaveHeight,
+    currentCurrentVelocity,
+    trend,
+    nextPeak,
+    nextTrough,
+    todayEvents,
+    fetchedAt:    now,
+    chartLabels,
+    chartHeights: slicedHeights,
+    chartNowIndex: currentIndex - chartStart,
+    allEvents,
+  }
+}
+
+// ── WaveChart: TidesChart-style area chart ────────────────────────────────
+interface WaveChartProps {
+  labels:   string[]
+  heights:  number[]
+  nowIndex: number
+  events:   WaveEvent[]
+}
+
+// Custom Chart.js plugin: draws the vertical red "now" line and
+// peak/trough dots with time labels — matching the reference image style.
+function makeNowLinePlugin(heights: number[]): Plugin<'line'> {
+  return {
+    id: 'nowLine',
+    afterDraw(chart, _args, opts: Record<string, unknown>) {
+      const { ctx, chartArea, scales } = chart
+      const nowIdx = (opts.nowIndex as number) ?? 0
+      const events = (opts.events as WaveEvent[]) ?? []
+      const labels = (opts.labels as string[]) ?? []
+
+      // Vertical red "now" line
+      const x = scales.x.getPixelForValue(nowIdx)
+      if (x >= chartArea.left && x <= chartArea.right) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.moveTo(x, chartArea.top)
+        ctx.lineTo(x, chartArea.bottom)
+        ctx.strokeStyle = '#ef4444'
+        ctx.lineWidth   = 1.5
+        ctx.setLineDash([4, 3])
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Peak/trough dots + time labels
+      events.forEach(ev => {
+        const h = parseInt(ev.time.slice(11, 13), 10)
+        const lbl = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`
+        const sliceIdx = labels.indexOf(lbl)
+        if (sliceIdx < 0) return
+
+        const ex = scales.x.getPixelForValue(sliceIdx)
+        const ey = scales.y.getPixelForValue(heights[sliceIdx] ?? ev.height)
+        if (!ex || !ey) return
+
+        const isPeak = ev.type === 'peak'
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(ex, ey, 4, 0, Math.PI * 2)
+        ctx.fillStyle   = isPeak ? '#3b82f6' : '#ef4444'
+        ctx.strokeStyle = '#fff'
+        ctx.lineWidth   = 1.5
+        ctx.fill()
+        ctx.stroke()
+
+        const timeStr = new Intl.DateTimeFormat('en-PH', {
+          timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true,
+        }).format(new Date(ev.time + ':00+08:00'))
+        ctx.fillStyle = isPeak ? '#1d4ed8' : '#dc2626'
+        ctx.font      = 'bold 9px Inter, system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText(timeStr, ex, isPeak ? ey - 10 : ey + 16)
+        ctx.restore()
+      })
+    },
+  }
+}
+
+function WaveChart({ labels, heights, nowIndex, events }: WaveChartProps) {
+  const plugin = makeNowLinePlugin(heights)
+  const maxH   = Math.max(...heights, 0.5)
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        data:            heights,
+        fill:            true,
+        tension:         0.4,
+        borderColor:     '#3b82f6',
+        borderWidth:     2,
+        backgroundColor: (ctx: { chart: ChartJS }) => {
+          const { chartArea } = ctx.chart
+          if (!chartArea) return 'rgba(59,130,246,0.25)'
+          const grad = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+          grad.addColorStop(0,   'rgba(59,130,246,0.45)')
+          grad.addColorStop(0.6, 'rgba(96,165,250,0.25)')
+          grad.addColorStop(1,   'rgba(186,230,253,0.05)')
+          return grad
+        },
+        pointRadius:      0,
+        pointHoverRadius: 0,
+      },
+    ],
+  }
+
+  const options: ChartOptions<'line'> = {
+    responsive:          true,
+    maintainAspectRatio: false,
+    animation:           false,
+    plugins: {
+      legend:  { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${(ctx.parsed.y as number).toFixed(2)} m`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12, color: '#9ca3af',
+        },
+        grid:   { display: false },
+        border: { display: false },
+      },
+      y: {
+        min:  0,
+        max:  Math.ceil(maxH * 10 + 2) / 10,
+        ticks: {
+          font: { size: 9 }, callback: v => `${(v as number).toFixed(1)} m`, color: '#9ca3af', count: 4,
+        },
+        grid:   { color: 'rgba(0,0,0,0.05)' },
+        border: { display: false },
+      },
+    },
+  }
+
+  // Pass dynamic data into the plugin via its options key
+  ;(options as Record<string, unknown>).plugins = {
+    ...(options.plugins as object),
+    nowLine: { nowIndex, events, labels },
+  }
+
+  return (
+    <div className="mt-3 rounded-xl bg-white/80 border border-blue-100 px-3 pt-3 pb-2">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+        24-Hour Wave Height Chart · Gloria, Oriental Mindoro
+      </p>
+      <div className="relative h-36">
+        <Line data={data} options={options} plugins={[plugin]} />
+      </div>
+      <div className="flex items-center gap-4 mt-1.5 text-[10px] text-gray-400">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-0.5 bg-red-400 rounded" /> Now
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-full bg-blue-500" /> Peak
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-full bg-red-400" /> Calm
+        </span>
+      </div>
+    </div>
+  )
 }
 
 // ── MarineSection: embedded inside WeatherForecastCard ───────────────────────
@@ -177,6 +354,7 @@ function TideSection() {
       )}
 
       {!tideLoading && !tideError && marine && (
+        <>
         <div className="grid gap-3 sm:grid-cols-2">
 
           {/* Current conditions */}
@@ -247,6 +425,15 @@ function TideSection() {
             }
           </div>
         </div>
+
+        {/* ── Wave height chart (TidesChart style) ── */}
+        <WaveChart
+          labels={marine.chartLabels}
+          heights={marine.chartHeights}
+          nowIndex={marine.chartNowIndex}
+          events={marine.allEvents}
+        />
+        </>
       )}
 
       <p className="mt-2 text-[10px] text-gray-400">
