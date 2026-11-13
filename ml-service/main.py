@@ -135,72 +135,192 @@ except Exception:
     print(f"⚠ Labels file not found, using defaults: {CLASS_LABELS}")
 
 # ── Species metadata ───────────────────────────────────────────────────────────
-# Local common names (Philippine), family, and brief notes for each species.
+# Local common names (Philippine), family, and diagnostic botanical notes for
+# all 36 Philippine mangrove species from the "Field Guide to Philippine Mangroves"
+# by Dr. J. H. Primavera (ZSL-Philippines / PTFCF / SEAFDEC).
 SPECIES_INFO = {
+    # ── Trained / ML-supported species ─────────────────────────────────────────
+    "Aegiceras corniculatum": {
+        "local_name":  "Saging-saging / Tinduk-tindukan",
+        "family":      "Myrsinaceae",
+        "description": "River mangrove shrub with fragrant white flower clusters and curved horn-like cylindrical fruits.",
+    },
     "Avicennia marina": {
-        "local_name":  "Api-api",
-        "family":      "Acanthaceae",
-        "description": "Grey mangrove with small oval leaves and pencil-like pneumatophores. Common in sandy and muddy shores.",
+        "local_name":  "Bungalon / Apiapi / Miapi",
+        "family":      "Avicenniaceae",
+        "description": "Grey mangrove with small oval leaves and pencil-like pneumatophores. Common pioneer on sandy and muddy shores.",
+    },
+    "Avicennia officinalis": {
+        "local_name":  "Bungalon / Apiapi / Miapi",
+        "family":      "Avicenniaceae",
+        "description": "Indian mangrove with rounded/obovate leaf tips, yellow-orange flowers, and heart-shaped fruit. Found along river estuaries and mid-to-landward flats.",
+    },
+    "Bruguiera cylindrica": {
+        "local_name":  "Pototan / Busain / Pototan lalaki",
+        "family":      "Rhizophoraceae",
+        "description": "Small-leafed orange mangrove with knee roots, greenish reflexed calyx lobes, and slender cylindrical straight propagules.",
     },
     "Bruguiera gymnorrhiza": {
-        "local_name":  "Busain",
+        "local_name":  "Pototan / Busain",
         "family":      "Rhizophoraceae",
-        "description": "Large-leafed orange mangrove with knee-like roots. Found in the middle and landward zones.",
+        "description": "Large-leafed orange mangrove with knee roots, solitary large red flowers, and heavy ribbed propagules. Middle and landward zones.",
     },
     "Ceriops tagal": {
-        "local_name":  "Malatangal",
+        "local_name":  "Tungog / Tangal",
         "family":      "Rhizophoraceae",
-        "description": "Spurred mangrove with small leathery leaves. Tolerates high salinity; common in upper intertidal zones.",
+        "description": "Spurred mangrove with yellow-green leaves, pendulous flowers, and warty ridged propagules with reflexed calyx collar. High salinity tolerant.",
+    },
+    "Lumnitzera racemosa": {
+        "local_name":  "Tabao / Culasi",
+        "family":      "Combretaceae",
+        "description": "White teruntum mangrove with small white flowers in axillary clusters and fleshy obovate leaves. Found on dry, hypersaline upper flats.",
     },
     "Rhizophora apiculata": {
-        "local_name":  "Bakawan bato",
+        "local_name":  "Bakhaw lalaki",
         "family":      "Rhizophoraceae",
-        "description": "True mangrove with distinctive stilt roots. Dominant species in Philippine mangrove forests.",
+        "description": "True mangrove with distinctive stilt roots, pairs of sessile flowers beneath foliage, and smooth cylindrical hypocotyls.",
     },
     "Rhizophora mucronata": {
-        "local_name":  "Bakawan lalaki",
+        "local_name":  "Bakhaw babae",
         "family":      "Rhizophoraceae",
-        "description": "Loop-root mangrove with larger leaves than R. apiculata. Grows in the seaward fringe.",
+        "description": "Loop-rooted mangrove with broad dark green leaves ending in a sharp spike (mucronate tip), 4–8 flowers per stalk, and long warty propagules.",
+    },
+    "Rhizophora stylosa": {
+        "local_name":  "Bakhaw bato",
+        "family":      "Rhizophoraceae",
+        "description": "Stilt-rooted mangrove with long conspicuous styles (4–6 mm) and mucronate leaves. Pioneer on sandy, rocky, and coralline reef-flats.",
     },
     "Sonneratia alba": {
         "local_name":  "Pagatpat",
-        "family":      "Lythraceae",
-        "description": "Mangrove apple with white flowers and round fruit. Pioneer species on newly deposited sediments.",
-    },
-    "Avicennia officinalis": {
-        "local_name":  "Api-api",
-        "family":      "Acanthaceae",
-        "description": "Indian mangrove with yellow flowers. Found in the landward intertidal zone.",
-    },
-    "Bruguiera cylindrica": {
-        "local_name":  "Pototan lalaki",
-        "family":      "Rhizophoraceae",
-        "description": "Small-leafed orange mangrove of the mid-intertidal zone.",
-    },
-    "Rhizophora stylosa": {
-        "local_name":  "Bakawan babae",
-        "family":      "Rhizophoraceae",
-        "description": "Stilt-rooted mangrove tolerant of exposed, high-energy shores.",
+        "family":      "Sonneratiaceae",
+        "description": "Mangrove apple with cone-shaped pneumatophores, leathery rounded leaves, white brush-like stamens, and star-shaped calyx base.",
     },
     "Sonneratia caseolaris": {
         "local_name":  "Pedada",
-        "family":      "Lythraceae",
-        "description": "Mangrove apple of brackish riverbanks with red-tipped flowers.",
+        "family":      "Sonneratiaceae",
+        "description": "Mangrove apple of brackish riverbanks with tall pneumatophores, red petiole bases, bright crimson stamens, and flat spreading calyx lobes.",
     },
     "Xylocarpus granatum": {
         "local_name":  "Tabigi",
         "family":      "Meliaceae",
-        "description": "Cannonball mangrove with large round fruit and buttress roots.",
+        "description": "Cannonball mangrove with prominent undulating ribbon-like plank buttress roots, smooth peeling bark, and large spherical fruit (10–25 cm).",
     },
-    "Lumnitzera racemosa": {
-        "local_name":  "Kulasi",
+
+    # ── Additional Philippine species (Field Guide to Philippine Mangroves) ────
+    "Acanthus ebracteatus": {
+        "local_name":  "Lagiwliw / Ragoyroy",
+        "family":      "Acanthaceae",
+        "description": "Sea holly shrub with spiny holly-like leaves and white flowers without bracteoles. Upper intertidal and brackish waterways.",
+    },
+    "Acanthus ilicifolius": {
+        "local_name":  "Lagiwliw / Ragoyroy",
+        "family":      "Acanthaceae",
+        "description": "Spiny sea holly with light blue to violet flowers with bracteoles. Common along brackish channels and disturbed mangrove margins.",
+    },
+    "Acanthus volubilis": {
+        "local_name":  "Lagiwliw / Ragoyroy",
+        "family":      "Acanthaceae",
+        "description": "Twining spineless sea holly with smooth-margined leaves and white flowers. Scrambles over other mangrove shrubs along tidal banks.",
+    },
+    "Acrostichum aureum": {
+        "local_name":  "Palaypay / Lagolo",
+        "family":      "Pteridaceae",
+        "description": "Large coarse mangrove fern forming dense stands. Pinnae leaflets have blunt or rounded tips. Abundant in clear-felled and elevated landward sites.",
+    },
+    "Acrostichum speciosum": {
+        "local_name":  "Palaypay",
+        "family":      "Pteridaceae",
+        "description": "Mangrove fern distinguishable by elongated to sharply pointed leaflet tips. Thrives in shaded forest interiors and middle-to-landward zones.",
+    },
+    "Aegiceras floridum": {
+        "local_name":  "Saging-saging / Tinduk-tindukan",
+        "family":      "Myrsinaceae",
+        "description": "River mangrove tree with white flowers, distinguished from A. corniculatum by straight (not curved) horn-like fruits. Prefers sandy/limestone shores.",
+    },
+    "Avicennia alba": {
+        "local_name":  "Bungalon / Apiapi / Miapi",
+        "family":      "Avicenniaceae",
+        "description": "Mangrove tree with lanceolate pointed leaves, chalky-white leaf undersides, pencil pneumatophores, and conical pointed fruit. Seaward pioneer.",
+    },
+    "Avicennia rumphiana": {
+        "local_name":  "Bungalon / Apiapi / Miapi",
+        "family":      "Avicenniaceae",
+        "description": "Mangrove tree characterized by distinctly hairy, brownish leaf undersurfaces and downy fruit. Found on upper intertidal sandy-mud substrates.",
+    },
+    "Brownlowia tersa": {
+        "local_name":  "Maragomon",
+        "family":      "Tiliaceae",
+        "description": "Dense mangrove shrub with lanceolate leaves having silvery-brown peltate scales beneath, pinkish flowers, and 2-lobed woody capsules.",
+    },
+    "Bruguiera parviflora": {
+        "local_name":  "Langarai",
+        "family":      "Rhizophoraceae",
+        "description": "Slender tree with yellowish-green foliage, clusters of 3–7 small yellowish flowers, and smooth slender cylindrical propagules.",
+    },
+    "Bruguiera sexangula": {
+        "local_name":  "Pototan",
+        "family":      "Rhizophoraceae",
+        "description": "Upriver orange mangrove with single large yellow to orange-red calyx with 10–12 lobes and ribbed hypocotyls. Tolerates freshwater influence.",
+    },
+    "Camptostemon philippinensis": {
+        "local_name":  "Gapas-gapas",
+        "family":      "Bombacaceae",
+        "description": "Rare Philippine-endemic mangrove tree with small white flowers and capsule fruits containing cotton-like woolly seeds.",
+    },
+    "Ceriops decandra": {
+        "local_name":  "Baras-baras",
+        "family":      "Rhizophoraceae",
+        "description": "Spurred mangrove shrub with erect flower clusters, white petals, and straight club-shaped propagules with erect calyx lobes.",
+    },
+    "Excoecaria agallocha": {
+        "local_name":  "Lipata / Buta-buta",
+        "family":      "Euphorbiaceae",
+        "description": "Blind-your-eye mangrove containing caustic milky sap. Separate male catkins and female flower clusters; 3-lobed capsules.",
+    },
+    "Heritiera littoralis": {
+        "local_name":  "Dungon / Dungon-late",
+        "family":      "Sterculiaceae",
+        "description": "Looking-glass mangrove with massive sinuous buttress roots, silvery-white leaf undersides, and large keeled boat-shaped woody fruits.",
+    },
+    "Kandelia candel": {
+        "local_name":  "Bakawan-bata",
+        "family":      "Rhizophoraceae",
+        "description": "Rare localized mangrove recorded in Aurora (Baler and Casiguran Bay). White spider-like flowers with many stamens and slender propagules.",
+    },
+    "Lumnitzera littorea": {
+        "local_name":  "Tabao / Culasi",
         "family":      "Combretaceae",
-        "description": "White-flowered mangrove of the landward margin.",
+        "description": "Red-flowered teruntum mangrove with brilliant scarlet terminal flower clusters and knee roots. Mid-to-landward forest edges.",
     },
-    "Aegiceras corniculatum": {
-        "local_name":  "Saging-saging",
-        "family":      "Primulaceae",
-        "description": "River mangrove with clustered white flowers and horn-shaped fruit.",
+    "Nypa fruticans": {
+        "local_name":  "Nipa / Sasa",
+        "family":      "Arecaceae",
+        "description": "Mangrove palm with extensive creeping rhizomes, massive erect pinnate fronds, and globular fibrous fruiting heads. Estuarine riverbanks.",
+    },
+    "Osbornia octodonta": {
+        "local_name":  "Tawalis / Bunot-bunot",
+        "family":      "Myrtaceae",
+        "description": "Myrtle mangrove with aromatic obovate leaves, spongy fibrous bark, and small white flowers with 8 calyx teeth. Thrives on rocky/coralline shores.",
+    },
+    "Pemphis acidula": {
+        "local_name":  "Bantigi",
+        "family":      "Lythraceae",
+        "description": "Sturdy wind-resistant coastal shrub or small tree with small fleshy leaves and solitary white flowers. Pioneer on limestone and reef rock.",
+    },
+    "Scyphiphora hydrophyllacea": {
+        "local_name":  "Nilad",
+        "family":      "Rubiaceae",
+        "description": "Shrub or small tree with sticky terminal buds, white-to-pink tubular flowers, and fluted cylindrical ribbed fruits. Historical namesake of Maynila.",
+    },
+    "Sonneratia ovata": {
+        "local_name":  "Pedada",
+        "family":      "Sonneratiaceae",
+        "description": "Mangrove apple with broadly ovate/egg-shaped leaves with heart-shaped bases, white stamens, and persistent calyx lobes hugging the fruit base.",
+    },
+    "Xylocarpus moluccensis": {
+        "local_name":  "Piag-ao",
+        "family":      "Meliaceae",
+        "description": "Mangrove tree with rough fissured dark bark, peg-like or conical pneumatophores, deciduous leaves turning red before shedding, and 6–10 cm globose fruit.",
     },
 }
 

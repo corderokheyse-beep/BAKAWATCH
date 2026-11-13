@@ -494,10 +494,10 @@ export default function SeedlingsPage() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total Received',  value: totalReceived,  color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-l-4 border-blue-500' },
-            { label: 'Total Planted',   value: totalPlanted,   color: 'text-green-600',   bg: 'bg-green-50',   border: 'border-l-4 border-green-500' },
-            { label: 'Remaining Stock', value: totalRemaining, color: 'text-primary-600', bg: 'bg-primary-50', border: 'border-l-4 border-primary-500' },
-            { label: 'Identified Species', value: summary.length, color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-l-4 border-purple-500' },
+            { label: 'Total Received',  value: totalReceived.toLocaleString(),  color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-l-4 border-blue-500' },
+            { label: 'Total Planted',   value: totalPlanted.toLocaleString(),   color: 'text-green-600',   bg: 'bg-green-50',   border: 'border-l-4 border-green-500' },
+            { label: 'Remaining Stock', value: totalRemaining.toLocaleString(), color: 'text-primary-600', bg: 'bg-primary-50', border: 'border-l-4 border-primary-500' },
+            { label: 'Identified Species', value: summary.length.toLocaleString(), color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-l-4 border-purple-500' },
           ].map(s => (
             <div key={s.label} className={`card ${s.border} ${s.bg}`}>
               <p className={`text-2xl font-extrabold ${s.color}`}>{s.value}</p>
@@ -505,6 +505,56 @@ export default function SeedlingsPage() {
             </div>
           ))}
         </div>
+
+        {/* Per-Species Stock Breakdown */}
+        {summary.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <Sprout className="w-4 h-4 text-emerald-600" />
+                Remaining Stock by Species
+              </h3>
+              <span className="text-xs text-gray-500 font-medium">
+                {summary.length} {summary.length === 1 ? 'species' : 'species'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {summary.map(item => {
+                const spObj = species.find(s => s.scientific_name.toLowerCase() === item.species_name.toLowerCase())
+                const remaining = Number(item.total_remaining) || 0
+                const received = Number(item.total_received) || 0
+                const planted = Number(item.total_planted) || 0
+                const damaged = Number(item.total_damaged) || 0
+
+                return (
+                  <div key={item.species_name} className="rounded-xl border border-gray-100 bg-gray-50/60 p-3.5 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                          {spObj?.local_name ?? item.species_name}
+                        </p>
+                        <p className="text-xs text-gray-500 italic truncate">
+                          {item.species_name}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        'shrink-0 text-sm font-extrabold px-2 py-0.5 rounded-lg tabular-nums',
+                        remaining > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'
+                      )}>
+                        {remaining.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 border-t border-gray-200/60 pt-2">
+                      <span>Rcvd: <strong className="text-gray-700">{received.toLocaleString()}</strong></span>
+                      <span>Planted: <strong className="text-green-700">{planted.toLocaleString()}</strong></span>
+                      <span>Damaged: <strong className="text-red-600">{damaged.toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Filter + Add button */}
         <div className="flex items-center gap-3 flex-wrap">

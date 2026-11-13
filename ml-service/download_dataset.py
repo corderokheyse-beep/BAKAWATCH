@@ -50,11 +50,6 @@ PHOTO_SIZE     = "large" # iNat sizes: square|small|medium|large|original
 
 # Training class list: the 13 species with enough research-grade images
 # (>= MIN_PER_CLASS) per the survey. The classifier is trained on these.
-#
-# EXCLUDED from training (too few images — kept manual-only in the app):
-#   • Bruguiera sexangula (~108)   • Ceriops decandra (~36)
-#
-# taxon_id is resolved live at runtime; the survey verified these exist.
 SPECIES = [
     "Avicennia marina",
     "Avicennia officinalis",
@@ -69,6 +64,47 @@ SPECIES = [
     "Xylocarpus granatum",
     "Lumnitzera racemosa",
     "Aegiceras corniculatum",
+]
+
+# Full 36 species documented in "Field Guide to Philippine Mangroves"
+# by Dr. J. H. Primavera (ZSL-Philippines / PTFCF / SEAFDEC).
+PHILIPPINE_MANGROVES_ALL = [
+    "Acanthus ebracteatus",
+    "Acanthus ilicifolius",
+    "Acanthus volubilis",
+    "Acrostichum aureum",
+    "Acrostichum speciosum",
+    "Aegiceras corniculatum",
+    "Aegiceras floridum",
+    "Avicennia alba",
+    "Avicennia marina",
+    "Avicennia officinalis",
+    "Avicennia rumphiana",
+    "Brownlowia tersa",
+    "Bruguiera cylindrica",
+    "Bruguiera gymnorrhiza",
+    "Bruguiera parviflora",
+    "Bruguiera sexangula",
+    "Camptostemon philippinensis",
+    "Ceriops decandra",
+    "Ceriops tagal",
+    "Excoecaria agallocha",
+    "Heritiera littoralis",
+    "Kandelia candel",
+    "Lumnitzera littorea",
+    "Lumnitzera racemosa",
+    "Nypa fruticans",
+    "Osbornia octodonta",
+    "Pemphis acidula",
+    "Rhizophora apiculata",
+    "Rhizophora mucronata",
+    "Rhizophora stylosa",
+    "Scyphiphora hydrophyllacea",
+    "Sonneratia alba",
+    "Sonneratia caseolaris",
+    "Sonneratia ovata",
+    "Xylocarpus granatum",
+    "Xylocarpus moluccensis",
 ]
 
 # Regions to search, in priority order. place_id 7248 = Philippines.
@@ -159,13 +195,15 @@ def download_full(url: str, save_path: Path) -> bool:
         return False
 
 
-def survey() -> dict:
+def survey(species_list=None) -> dict:
     """Count available images per species per region. No downloads."""
+    target_species = species_list or SPECIES
     print("=" * 68)
     print("  SURVEY MODE — counting available iNaturalist images (no download)")
+    print(f"  Target count: {len(target_species)} species")
     print("=" * 68)
     report = {}
-    for species in SPECIES:
+    for species in target_species:
         tid = resolve_taxon_id(species)
         row = {"taxon_id": tid, "regions": {}, "estimated_photos": 0}
         if tid:
@@ -188,9 +226,9 @@ def survey() -> dict:
     SURVEY_PATH.write_text(json.dumps(report, indent=2))
     reliable = [s for s, r in report.items() if r["estimated_photos"] >= MIN_PER_CLASS]
     print("-" * 68)
-    print(f"  Species meeting the {MIN_PER_CLASS}-image bar: {len(reliable)}/{len(SPECIES)}")
+    print(f"  Species meeting the {MIN_PER_CLASS}-image bar: {len(reliable)}/{len(target_species)}")
     print(f"  Reliable: {', '.join(reliable) if reliable else '(none)'}")
-    low = [s for s in SPECIES if s not in reliable]
+    low = [s for s in target_species if s not in reliable]
     if low:
         print(f"  Below bar (keep manual-only): {', '.join(low)}")
     print(f"\n  Survey written to {SURVEY_PATH}")
@@ -248,16 +286,19 @@ def download_species(species: str, max_per_class: int) -> int:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--survey", action="store_true", help="count only, no download")
+    ap.add_argument("--all", action="store_true", help="include all 36 Philippine mangrove species from Primavera field guide")
     ap.add_argument("--max", type=int, default=MAX_PER_CLASS, help="per-class cap")
     ap.add_argument("--species", type=str, default=None, help="only this species")
     args = ap.parse_args()
 
+    active_pool = PHILIPPINE_MANGROVES_ALL if args.all else SPECIES
+
     if args.survey:
-        survey()
+        survey(active_pool)
         return
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    targets = [args.species] if args.species else SPECIES
+    targets = [args.species] if args.species else active_pool
     print("=" * 68)
     print("  Mangrove Dataset Downloader v2 — full-res, multi-photo")
     print(f"  Species: {len(targets)}   Cap/class: {args.max}   Size: {PHOTO_SIZE}")

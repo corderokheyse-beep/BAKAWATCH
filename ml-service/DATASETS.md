@@ -1,9 +1,24 @@
-# BAKAWATCH — Free ML Dataset Sources
-## Mangrove Species Classification
+# BAKAWATCH — Free ML Dataset Sources & Reference Guides
+## Mangrove Species Classification & Botanical Dataset
 
-This document lists all free, publicly accessible datasets and image sources
-that can be used to train or improve the `mangrove_model.h5` MobileNetV2
-classifier in the BAKAWATCH ML service.
+This document lists all reference field guides, taxonomic authorities, free datasets,
+and image sources that underpin the mangrove species datasets, zonation models,
+and image classifier in the BAKAWATCH system.
+
+---
+
+## 0. Field Guide to Philippine Mangroves (Taxonomic & Morphological Reference)
+**Authors:** J. H. Primavera, Ph.D. (with R. S. Sadaba, M. J. H. L. Lebata, J. P. Altamirano, and R. D. B. Dianala)  
+**Publishers / Partners:** Philippine Tropical Forest Conservation Foundation, Inc. (PTFCF), Zoological Society of London (ZSL)-Philippines, SEAFDEC Aquaculture Department, and UNESCO  
+**Coverage:** **36 true Philippine mangrove species across 17 genera and 12 families**  
+**What it provides:**
+- Authoritative scientific classification, accepted botanical families, and local Philippine names (Tagalog, Visayan, and regional variants).
+- Close-up diagnostic feature photographs for visual identification:
+  - Leaves (shape, venation, apex, sap presence, underside pubescence/colour)
+  - Inflorescences & flowers (stamens, calyx lobe arrangement, bracteoles)
+  - Propagules & fruits (cylindrical, curved, ribbed, globular, or winged capsules)
+  - Bark & pneumatophores (stilt/prop roots, pencil roots, knee roots, ribbon buttresses, peg roots)
+- Canonical reference for the 36 species seeded in `coastalwatch-api` (`MangroveSpeciesSeeder.php`), mapped in `coastalwatch-frontend` (`mangrove-zonation.ts`), and catalogued in `ml-service` (`main.py` & `download_dataset.py`).
 
 ---
 
