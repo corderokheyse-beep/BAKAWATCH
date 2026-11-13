@@ -107,7 +107,7 @@ export function getNavLinks(role?: string): NavLink[] {
       return [
         { href: '/dashboard',               label: 'Dashboard',     icon: LayoutDashboard },
         { href: '/map',                     label: 'Live Map',      icon: Map },
-        { href: '/sites',                   label: 'Sites',         icon: Leaf },
+        { href: '/reports/new',             label: 'Report',        icon: AlertTriangle },
         { href: '/events',                  label: 'Events',        icon: CalendarDays },
         { href: '/volunteer/joined-events', label: 'Joined Events', icon: CalendarDays },
         { href: '/volunteer/requests',      label: 'My Requests',   icon: FileText },

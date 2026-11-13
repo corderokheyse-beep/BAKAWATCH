@@ -95,6 +95,25 @@ function MobileBottomNav({ navLinks }: { navLinks: ReturnType<typeof getNavLinks
     >
       {visible.map(({ href, label, icon: Icon }) => {
         const active = href === activeHref
+        // Report Threat center FAB — raised green button
+        if (href === '/reports/new') {
+          return (
+            <Link
+              key={href}
+              href={href}
+              className="flex-1 flex flex-col items-center justify-center relative -mt-4"
+              aria-label="Report Threat"
+            >
+              <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-900/40 border-4 border-[#1a4731]">
+                <Icon className="w-5 h-5 text-white" />
+              </div>
+              <span className={`text-[10px] font-semibold mt-0.5 ${active ? 'text-white' : 'text-white/50'}`}>
+                {label}
+              </span>
+            </Link>
+          )
+        }
+
         return (
           <Link
             key={href}
